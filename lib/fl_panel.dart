@@ -1,0 +1,14 @@
+/// A docking layout for Flutter.
+///
+/// A tree of splits, single panels and tab groups (`model.dart`), a
+/// controller that edits it and runs a drag (`PanelController`), and a host
+/// widget that draws one window of it with ordinary widgets inside every
+/// panel (`PanelHost`), through a `PanelChrome` that is replaceable.
+library;
+
+export 'model.dart';
+export 'src/controller/panel_controller.dart';
+export 'src/widgets/chrome.dart';
+export 'src/widgets/default_chrome.dart';
+export 'src/widgets/panel_host.dart';
+export 'src/widgets/panel_theme.dart';

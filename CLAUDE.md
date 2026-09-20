@@ -1,0 +1,280 @@
+# Working on fl_panel
+
+A docking layout for Flutter: a tree describing rectangles, a layout
+algorithm, interaction and hit-testing, persistence. Standalone package; it
+will be consumed as a git submodule by the apps that use it, `ripple_effect`
+first, and it knows nothing about what a panel contains.
+
+## Environment
+
+**`flutter` and `dart` are not on PATH.** The toolchain is pinned in `.fvmrc`
+to 3.41.9 and reached through FVM. Either works:
+
+```sh
+fvm flutter test
+export PATH="$HOME/fvm/versions/3.41.9/bin:$PATH"
+```
+
+```sh
+pre-commit install          # once per clone
+pre-commit run --all-files  # sweep the tree
+```
+
+The hooks run format, analyze and both test suites — the package's and the
+example's — on any Dart change. The example is not a sample; it is the only
+thing that exercises the docking end to end.
+
+## Verifying a change
+
+```sh
+fvm flutter analyze && fvm flutter test
+cd example && fvm flutter analyze && fvm flutter test
+fvm flutter run -d linux                                # nothing replaces dragging things
+```
+
+`dart format` is checked, never applied by a hook — a hook that rewrites a file
+under you turns one failed commit into two.
+
+## House style
+
+Tests: local factory closures at the top of `main()`, `addTearDown(controller.dispose)`,
+`reason:` on anything non-obvious, no mocks, helpers declared before first use.
+British spelling in prose ("serialisation", "normalises", "colour").
+
+Comments earn their place by saying *why*, especially where the obvious
+implementation is wrong. Doc comments on public API; a `///` on a field that
+just restates its name is noise.
+
+CHANGELOG entries state the change **and its rationale**, name the symbol in
+backticks with its default in parentheses, and close by naming the test that
+pins the new behaviour.
+
+## The shape of it
+
+Four layers, each a view onto the one below, and only the top two import
+Flutter:
+
+| | |
+| --- | --- |
+| `lib/src/model/` | The tree — `PanelApp` → `PanelWindow` → `LayoutNode` (`SplitNode`, `SinglePanel`, `TabGroup`) → `PanelTab` — and `LayoutTree`, the edits on it as pure functions. `PanelJson` is the file format. |
+| `lib/src/layout/` | `PanelSolver`: tree and bounds in, a rectangle per node and the dividers out; the inverse for one divider. `DockResolver`: a pointer position in, a legal drop out. |
+| `lib/src/policy/` | `DockPolicy`, the two affinity levels. |
+| `lib/src/controller/` | `PanelController`, a `ChangeNotifier` over an immutable `PanelApp`: the verbs, the focused leaf, the drag session, the event stream, load and save. |
+| `lib/src/widgets/` | `PanelHost`, one window of the layout as widgets; `PanelChrome`, the contract for everything drawn that is not content; `DefaultPanelChrome`, the three tab styles. |
+
+`package:fl_panel/model.dart` exports the first three and nothing else, and
+`test/flutter_free_test.dart` is the grep that keeps Flutter out of them. A
+tree can be built, edited, solved and serialised headless.
+
+## The decisions
+
+Each of these was argued once, in the design session that started the
+package, and is recorded here so it is not argued again by accident.
+
+**A tab holds an identity, never a widget.** `PanelTab` is a `contentId`,
+JSON metadata, the forms it may take, and its minimums. The host's
+`contentBuilder` turns the id into a widget. Three things rest on this: the
+tree serialises without asking anybody; a tab moving between windows —
+separate engines under multi-window, nothing can carry a widget across — is a
+tree edit and a rebuild from identity; and the host keeps ownership of what a
+tab *is*.
+
+**Splits are n-ary and flattened, not binary.** A `SplitNode` holds any
+number of children along one axis, and `LayoutTree.normalise` splices a child
+split on its parent's axis into the parent. A strictly binary tree draws
+`((A|B)|C)` and `(A|(B|C))` identically and resizes them differently, and which
+one a user has is an accident of the order they docked things in. Flattening
+gives every layout exactly one tree: a saved file round-trips to what the user
+recognises, and tests compare trees by equality. The user's original sketch
+was `Split(direction, ratio, first, second)`; this is that with the ratio
+generalised to one extent per child.
+
+**Extents are weights, and `fixed` is a preference.** `PanelExtent.flex`
+children share what is left after `fixed` ones take their pixels. Weights
+persist and pixels do not, so a file is indifferent to DPI and window size.
+Content minimums (`PanelTab.minWidth`/`minHeight`) are the only hard
+constraint: a fixed child is held at its pixels while the minimums allow and
+gives them back when they do not, and when even the minimums do not fit,
+everything scales down together rather than one child going to zero. A leaf's
+minimum is the largest among its tabs, not the active tab's, because switching
+tabs must never move a divider.
+
+**`SinglePanel` and `TabGroup` are distinct types, and a group of one stays a
+group.** The affinities are about which *form* a content may take, and both
+shapes exist in real products — Blender's areas are single panels with a
+header, VS Code's editor groups keep their strip at one tab. Nothing collapses
+a group to a panel by itself; only a drop that asks for the `single` form makes
+one. A single panel joined by a tab becomes a group *under the same id*, and a
+moved leaf keeps its id, so anything keyed on a leaf follows it.
+
+**Every edit ends in `normalise`, and `dock` returns null for a no-op.** No
+caller ever sees a split of one, an empty group or a same-axis nesting.
+`LayoutTree.dock` answers null when the tree or the policy refuses the move
+*and* when the move would change nothing — a tab dropped on the centre of its
+own group, a panel dropped beside itself. The resolver uses that null to decide
+what lights up, so the rules live in one place and a drag never has to fail.
+
+**Two affinity levels, one policy object.** Level one is the surface matrix,
+answered per tab from `PanelTab.forms`: may this content be a single panel, a
+tab, or either. Level two is the host's entirely: `DockPolicy.canJoin` and
+`canSplit` are handed both sides of a proposed move, metadata included, and
+answer with a bool. The base class allows everything.
+
+**A window has a focused leaf, and it is model state.** `PanelWindow.focusedLeafId`
+is where `open` puts new content, what `nextTab`/`closeActive` act on, and
+whose strip draws the full accent. It moves on activation, on a pointer down
+in a panel, and on `focusLeaf`; it persists, because "the group I was in" is
+part of the layout a user expects back; and `focusedLeaf` falls back to the
+first leaf when the id is gone, so nothing has to keep it valid. Changing it
+is not a settle — nor is activating a tab — because neither is worth a write
+per click.
+
+**`open` with no target falls back.** The focused leaf first; when it or
+the policy refuses — a single panel whose content may not be tabbed, a group
+of the wrong kind — the first leaf that accepts, then a new leaf along the
+right edge. The demo hit this on its first click: Files was the focused leaf
+and Files takes no tabs.
+
+**Chips shrink to a floor, then the strip scrolls.** One behaviour, not a
+mode: every chip is `(strip − gaps) / n` clamped to
+`[tabMinWidth, tabMaxWidth]`, and once that clamps low the row is wider than
+the strip and scrolls. Uniform widths are what make this simple — the reveal
+offset is `index × (width + gap)`, no text is measured, and strip hit-testing
+would be arithmetic if it were not already `MetaData`. The strip never
+scrolls by pointer drag: a drag on a strip already means "move this tab", and
+the scroll view's horizontal recogniser would win that arena every time
+(it accepts at `kTouchSlop`, a pan at `kPanSlop`). The wheel scrolls it — a
+vertical wheel over a horizontal strip, as browsers do — and so does a reveal.
+
+**Reveal is a request with a nonce, answered in two places.** `focus(tabId)`
+activates, focuses the leaf, and sets `PanelController.reveal`. The strip
+that holds the tab scrolls its chip into view (`TabStrip._scheduleReveal`,
+from layout, because the offset depends on the chip width just computed);
+with `keyboard: true` the host gives the tab's `FocusScopeNode` the focus and,
+if the scope never held it, steps into the first focusable descendant with
+`nextFocus()` — a scope that never had focus otherwise keeps it for itself.
+Both remember the nonce they answered, so a rebuild does not re-scroll.
+Activation alone also reveals: a strip watches `group.active` and scrolls to
+a newly active chip whether the change came from a click or a verb.
+
+**Reordering counts indices with the tab still in place.** A strip hit says
+"between chips 1 and 2" as the user sees them; `dock` removes the tab first and
+shifts the index down when the tab sat before it. Dropping a tab into its own
+slot, or the slot right after it, is the no-op it looks like.
+
+## The chrome
+
+`PanelChrome` is the contract: `buildStrip`, `buildHeader`, `buildDivider`,
+`buildDropPreview`, plus the two heights. Each is handed a scope — the
+resolved theme, the callbacks, the decorations, whether the leaf is focused,
+and for a strip the group, a host-owned `ScrollController` and the pending
+reveal. **The one rule custom chrome must keep** is `StripScope.tabSlot(index,
+child)` around every chip and `stripSlot` around the strip: those apply the
+`MetaData` the drop hit-test finds, and chips outside them are not drop
+targets. `test/chrome_test.dart` *custom chrome* pins that a bare chrome that
+does only this still docks.
+
+`DefaultPanelChrome` draws the three `PanelTabStyle`s from one `TabChip`:
+
+- **attached** — a `DecoratedBox`: flush, hairline right border, accent line
+  on top of the active chip (`indicatorColor` when the group is focused,
+  `unfocusedIndicatorColor` when not), full height so the active chip paints
+  over the strip's bottom hairline and joins its content.
+- **blended** — a `CustomPaint` with `BlendedChipPainter`: the Chrome shape,
+  an open path from bottom-left to bottom-right whose sides leave the floor
+  through a quarter circle of `shoulder` and whose top corners have
+  `radius`. The bottom is not drawn, so the active chip and the content are
+  one surface; the strip floor is a step darker (`surfaceContainerHigh`) so
+  the chip reads as cut out of it. Short separators between *inactive*
+  neighbours only. The shoulder is a fillet: the curve is thin at the very
+  edge, which is right and which the first test got wrong.
+- **floating** — a rounded `DecoratedBox` inset by `inset` with `gap` between
+  pills; the active one filled, bordered with the indicator when focused; a
+  hairline under the whole strip.
+
+Geometry per style is a `PanelTabStyleSpec` with defaults in
+`PanelTabStyleSpec.of`; `PanelTheme.tabStyleSpec` overrides them. A window may
+mix styles: `PanelHost.tabStyleOf(group)` picks per group and the host
+resolves one theme per style used, since the floor colour differs.
+
+`PanelDecorations` is what an application hangs on the default chrome without
+replacing it — `tabLeading`, `tabTrailing` (which *replaces* the close glyph,
+the way an unsaved dot does; middle click and the verbs still close),
+`stripTrailing`, `headerTrailing`, `onTabSecondaryTap`. The chrome never
+requires a `Material` ancestor.
+
+## The one architectural decision
+
+Docking's classic trap is content state surviving a move. Reparent a widget
+from group A to group B and Flutter rebuilds it from scratch unless it wears a
+`GlobalKey`, and `GlobalKey` reparenting has its own sharp edges — one frame,
+one tree, a leak if the key outlives the content.
+
+So `PanelHost` does not reparent. It renders **one flat `Stack`**: one
+`Positioned` content child per tab, keyed on the tab's id and placed by the
+solver's rectangles, with the chrome — strips, headers, dividers, the drop
+preview — as sibling layers above. Moving a tab changes its rectangle and
+nothing else. `test/panel_host_test.dart` *content keeps its state when its
+tab moves groups* is the pin. Inactive tabs are kept built under `Offstage` +
+`TickerMode` unless `PanelTab.keepAlive` is false, in which case they are not
+built at all and lose their state — the host says so for content too heavy to
+hold.
+
+The same reasoning is in `fl_nodes_v2`'s CLAUDE.md under the same heading,
+reached from a different direction: isolation is available one layer up from
+the render tree, and the widget layer should stay ordinary widgets.
+
+## Traps
+
+**Two pointer deltas can land in one frame.** A mouse reports faster than the
+screen paints. `PanelController.resize` solves the *current* tree for the
+host's bounds on every call rather than reading pixels off the host's last
+frame — with the stale layout, the second delta was measured against the same
+pixels as the first and the divider lost twenty pixels on every grab. The
+test *dragging a divider resizes and settles once* is what caught it.
+
+**Dividers deliver the slop distance.** `DividerHandle` uses
+`DragStartBehavior.down`; with the default `start`, the first eighteen pixels
+of every drag are swallowed by the recognizer and the handle lags the pointer.
+
+**Strip hit-testing goes through `MetaData`, not geometry.** The host knows
+every leaf's rectangle but not where one chip ends and the next begins —
+that depends on text. Each chip wears `MetaData(TabSlot(leafId, index))` and
+the strip's tail `StripSlot`; `PanelHost._hitAt` hit-tests the view at the
+pointer and walks the path for them, using the entry's local position to pick
+before or after. Everything below the strips is geometry: `LayoutResult.leafAt`.
+
+**The chrome must not need `Material`.** The close glyph was an `InkWell` and
+threw "No Material widget found" in the first widget test. A host that is not
+Material — or a test that pumps the host bare — has to work.
+
+**The drop overlay is `IgnorePointer`.** It is painted above the strips at the
+pointer, and the hit-test above would otherwise find it instead of them.
+
+**`onSettled` is the persistence hook, and live frames do not fire it.** A
+drop, a close, a divider *release*, an `updateTab` settle; the frames of a
+drag do not; `activate` and `focusLeaf` do not either, because which tab is
+active is persisted but not worth a write per click. A host that saves on
+`onSettled` gets one write per gesture.
+
+**Events come from one diff.** `PanelController.events` reports
+`TabOpened`/`TabClosed`/`TabMoved` by comparing every tab's placement before
+and after a commit, so no verb can forget to report and `load` reports what
+it replaced. `TabActivated`, `LeafFocused`, `TabUpdated` and `LayoutReplaced`
+are sent by the verbs themselves. The stream is synchronous: a listener sees
+the event before the frame that draws its consequence, which is what lets a
+host drop a session in the same tick its tab disappears.
+
+**`close` is async because of the guard.** `closeGuard` may show a dialog; the
+× fires and forgets, the verbs await, and the group verbs ask per tab in
+order so a refusal keeps one tab and closes the rest.
+
+## What is deliberately not here yet
+
+Floating panels (`PanelWindow` reserves the `floating` slot in the file
+format, empty), maximise/minimise of a leaf, pinning, overflow affordances on
+a scrolled strip (edge fades, a ⌄ listing every tab), and any
+`desktop_multi_window` integration. The model is multi-window from the start —
+`PanelApp` holds windows, `PanelController.moveToWindow` moves a tab between
+them — and the widget layer hosts one window per `PanelHost`; wiring a second
+engine to a second host is the application's job when it comes.
