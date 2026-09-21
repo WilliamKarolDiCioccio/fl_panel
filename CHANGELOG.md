@@ -1,114 +1,93 @@
+# Changelog
+
+What a host can do with each version, newest first. The reasoning behind a
+change lives beside the code in `CLAUDE.md`; this file only says what changed.
+
 ## 0.1.0
 
-The first cut: the tree, the solver, the controller, the host.
+First release: a docking layout for Flutter — a tree of splits, single panels
+and tab groups the user resizes, docks and rearranges, with ordinary widgets
+inside every panel, and a file format to bring it back.
 
-- `PanelApp` → `PanelWindow` → `LayoutNode` → `PanelTab`: an immutable tree
-  of splits, single panels and tab groups, edited by the pure functions in
-  `LayoutTree`, which normalises after every edit so no caller sees a split
-  of one, an empty group or a same-axis nesting. Splits are n-ary and flatten
-  same-axis children rather than binary, so `((A|B)|C)` and `(A|(B|C))` — which
-  draw the same and resize differently — are one tree. A tab holds a
-  `contentId` and metadata, never a widget, so the tree serialises and moves
-  between windows without asking anybody. `test/model_test.dart`.
-- `PanelSolver`: `PanelExtent.flex(weight)` children share what
-  `PanelExtent.fixed(pixels)` ones leave; `PanelTab.minWidth`/`minHeight` are
-  the only hard constraint, held by taking from siblings with slack, scaled
-  together when even they do not fit. `resize` trades pixels between two
-  neighbours and nobody else moves. `test/layout_test.dart`.
-- `DockResolver`: five zones over a leaf (centre joins, edges split), a band
-  along the window's edges splits the root, a strip hit inserts at the index.
-  Every candidate is checked by running the edit, so a drop the policy refuses
-  is never offered. `DockPolicy` carries the two affinity levels:
-  `canTakeForm` from `PanelTab.forms`, `canJoin`/`canSplit` for the host's
-  metadata rules. Default permissive. *affinity* in `test/model_test.dart`.
-- `PanelController`: a `ChangeNotifier` over the app; `dock`, `open`, `close`,
-  `activate`, `resize`, `moveToWindow`; the drag session (`beginDrag`,
-  `updateDrag`, `commitDrag`); `toJson`/`load` with an integer `version`
-  (`PanelApp.version`, 1) refused when newer and a `TabResolver` that drops
-  what this build cannot show. `onSettled` fires once per gesture, never per
-  frame.
-- `PanelHost`: one window as one flat `Stack`, a keyed `Positioned` per tab,
-  chrome above, preview on top — content is never reparented, so its state
-  survives a move. Strips and headers drag; dividers resize with
-  `DragStartBehavior.down` so they track the pointer from the first pixel.
-  `test/panel_host_test.dart`.
-- `PanelChrome`: the contract for everything drawn that is not content, with
-  `StripScope.tabSlot`/`stripSlot` as the one rule custom chrome keeps to stay
-  a drop target. `DefaultPanelChrome` draws three `PanelTabStyle`s —
-  `attached`, `blended` (a `BlendedChipPainter` with Chrome's shoulders, the
-  bottom left open so the active tab and its content are one surface),
-  `floating` — from a `PanelTabStyleSpec` per style, per theme or per group
-  through `PanelHost.tabStyleOf`. `PanelDecorations` hangs an icon, an unsaved
-  dot, a strip button and a context menu on the default chrome. *styles*,
-  *decorations* and *custom chrome* in `test/chrome_test.dart`.
-- Chips share a strip between `PanelTheme.tabMinWidth` (96) and
-  `tabMaxWidth` (200) and the strip scrolls once they would shrink below the
-  floor — by wheel, never by pointer drag, which already means "move". *shrink
-  then scroll* in `test/chrome_test.dart`.
-- `PanelWindow.focusedLeafId`, persisted: where `open` puts content (falling
-  back to the first leaf that accepts, then the right edge) and what
-  `nextTab`/`previousTab`/`closeActive` act on; the focused group's strip
-  shows the full accent. `PanelController.focus(tabId, keyboard:)` activates,
-  reveals the chip in a scrolled strip and, with `keyboard`, hands the content
-  the focus. `test/controller_test.dart` *focus*, `test/chrome_test.dart`
-  *focus reveals a clipped chip*.
-- `PanelController.events`, synchronous: `TabOpened`, `TabClosed`, `TabMoved`
-  from one placement diff per commit, plus `TabActivated`, `LeafFocused`,
-  `TabUpdated`, `LayoutReplaced`. `closeGuard` asked before any close, from
-  the × or a verb; `closeOthers`, `closeToTheRight`, `closeLeaf` ask per tab.
-  `updateTab` for a title or a flag. `test/controller_test.dart`.
-- `TabGroup.persistent` (false): a group that stays in the tree when its
-  last tab closes — an IDE's editor area, where documents come and go but
-  the place they open into is part of the layout. The rule is window-wide:
-  an empty persistent group is removed as soon as the tree keeps *another*
-  persistent group, so only the last editor area ever stands empty, and a
-  tab dragged out of a persistent group makes a persistent group, so an
-  editor area split in two is two editor areas that fold back into one as
-  they empty. `removeTab` empties rather than removes, `join` keeps the
-  flag, and an empty one cannot be dragged: its strip is a drop target, not
-  a handle. `LeafNode.activeTab` is nullable for it, and
-  `PanelHost.emptyLeafBuilder` draws what goes where its content would. The
-  file format carries `persistent`. *a persistent group survives its last
-  tab*, *an emptied editor area folds away while another remains* and *a tab
-  dragged out of an editor area makes another editor area* in
-  `test/model_test.dart`; *an empty persistent group draws its placeholder
-  and takes a drop* in `test/panel_host_test.dart`.
-- A removed child hands its room to the sibling before it — after it when
-  it was first — rather than to every sibling in proportion, so closing the
-  right-hand editor group widens the group beside it and does not nudge the
-  file tree along too; a fixed neighbour keeps its pixels and the room goes
-  to the nearest flex one. In `LayoutTree.replace`. *a removed child hands
-  its room to its neighbour* in `test/model_test.dart`.
-- `DockPolicy.takesFocus(leaf)` (true): which leaves may be the window's
-  focused leaf — where `open` puts content, what the keyboard verbs act on,
-  whose strip shows the full accent. An IDE answers no for its tool panels,
-  so a click in the file tree never makes the tree where the next document
-  opens, and the accent stays on the editor group it will open into.
-  `PanelController.focusedLeaf` falls back to the first leaf that does. *focus
-  policy* in `test/controller_test.dart`.
-- Context menus, in the shape of `fl_nodes_v2`'s: `PanelHost.contextMenus`
-  (`const PanelMenus()`; null for none) opens a Material menu on a right
-  click on a chip, a strip's background, a single panel's header or a
-  divider. The entries are `PanelMenuEntry` data built by
-  `PanelMenus.defaultEntries` from the controller's verbs — close verbs and
-  a Split submenu on a chip, Close all and Move to edge on a strip or a
-  header, Equalise and Swap on a divider, each greyed when it would not
-  apply — and `PanelMenus.build` rewrites them with the defaults in hand. A
-  `PanelDecorations.onTabSecondaryTap` keeps winning on chips. Two verbs
-  came with them: `PanelController.equalise` and `swap`, over
-  `LayoutTree.equalise`/`swap`, and `canDock` as the dry run a menu greys
-  by; a leaf moved to the window edge it already sits on is a no-op.
-  `test/menus_test.dart`.
+### The tree
+
+- `PanelApp` → `PanelWindow` → `LayoutNode` (`SplitNode`, `SinglePanel`,
+  `TabGroup`) → `PanelTab`: immutable values, edited by the pure functions in
+  `LayoutTree`, which normalises after every edit — no split of one, no empty
+  group, no same-axis nesting. Splits are n-ary. A tab holds a `contentId`
+  and a `metadata` map, never a widget.
+- `PanelExtent.flex(weight)` children share what `PanelExtent.fixed(pixels)`
+  ones leave; `PanelTab.minWidth` / `minHeight` are the only hard constraint,
+  and an over-constrained layout scales together rather than dropping a child
+  to zero.
+- `TabGroup.persistent` (false): a group that stays in the tree when its last
+  tab closes — an editor area. Window-wide, only the last empty one stands;
+  a tab dragged out of one makes another. `PanelHost.emptyLeafBuilder` draws
+  what goes where its content would.
 - `PanelTab.closable` (true): off for content an application always shows.
-  The chrome draws no close glyph on its chip or header, and
-  `PanelController.close` refuses without asking the guard, so the group
-  verbs skip it and `closeLeaf` keeps its leaf; it still moves. In the file
-  format as `closable`. *closable* in `test/controller_test.dart`, *an
-  unclosable tab draws no glyph* in `test/chrome_test.dart`.
-- `PanelDecorations.wrapTab`: a wrapper around the whole chip, inside the
-  drop slot — a tooltip, a spotlight target — because a host with a tour
-  needs to point at a tab and neither `tabLeading` nor `tabTrailing` is the
-  tab. Same test as above.
-- `package:fl_panel/model.dart` exports the Flutter-free half;
-  `test/flutter_free_test.dart` keeps it so.
-- `example/`: an IDE-shaped demo with a metadata policy and save/restore.
+  No close glyph, `close` refuses without asking the guard, the group verbs
+  skip it; it still moves.
+- `PanelTab.forms` says which surface a content may take — a single panel, a
+  tab, or either — and `PanelTab.keepAlive` (true) whether an inactive tab
+  stays built.
+- `package:fl_panel/model.dart` exports the Flutter-free half: the tree, the
+  edits, the solver, the resolver, the policy and the format.
+
+### Docking
+
+- Drag a tab out of its strip or a whole panel by its header. Over a leaf,
+  the centre joins it and the edges split it; a band along the window's
+  edges splits the root; a strip inserts at the index. A live preview shows
+  the drop before it lands, and a drop the policy refuses is never offered.
+- `DockPolicy`: `canTakeForm` from `PanelTab.forms`, `canJoin` and `canSplit`
+  handed both sides of a proposed move with their metadata, and
+  `takesFocus(leaf)` (true) for which leaves may be where the next document
+  opens. Permissive by default.
+- `PanelController.canDock(windowId, source, target)` is the dry run a menu
+  greys by.
+
+### The controller
+
+- `PanelController`, a `ChangeNotifier` over the app: `dock`, `open`,
+  `close`, `activate`, `resize`, `moveToWindow`, `equalise`, `swap`, and the
+  drag session — `beginDrag`, `updateDrag`, `commitDrag`. `onSettled` fires
+  once per gesture, never per frame.
+- `PanelWindow.focusedLeafId`, persisted: where `open` puts content, what
+  `nextTab` / `previousTab` / `closeActive` act on, whose strip shows the full
+  accent. `focus(tabId, keyboard:)` activates, reveals the chip in a scrolled
+  strip and, with `keyboard`, hands the content the focus.
+- `closeGuard` (`CloseGuard?`, null) is asked before any close, from the ×
+  or a verb; `closeOthers`, `closeToTheRight` and `closeLeaf` ask per tab.
+  `updateTab` for a title or a flag.
+- `events`, synchronous: `TabOpened`, `TabClosed`, `TabMoved` — one placement
+  diff per commit — plus `TabActivated`, `LeafFocused`, `TabUpdated`,
+  `LayoutReplaced`.
+- `toJson()` and `load(json, resolve:)` with an integer `version`
+  (`PanelApp.version`, 1), refused when newer; the `TabResolver` drops what
+  this build cannot show and the tree tidies itself.
+
+### The host and the chrome
+
+- `PanelHost` renders one window as one flat `Stack` with a keyed child per
+  tab, so content is never reparented and its state survives a move. Strips
+  and headers drag; dividers resize from the first pixel.
+- Three `PanelTabStyle`s — `attached`, `blended`, `floating` — from
+  `DefaultPanelChrome`, per theme (`PanelTheme.tabStyle`) or per group
+  (`PanelHost.tabStyleOf`); geometry per style in `PanelTabStyleSpec`.
+- Chips share a strip between `PanelTheme.tabMinWidth` (96) and
+  `tabMaxWidth` (200), then the strip scrolls — by wheel and by `focus`,
+  never by pointer drag.
+- `PanelDecorations` hangs an icon (`tabLeading`), an unsaved dot
+  (`tabTrailing`, replacing the close glyph), a wrapper round the whole chip
+  (`wrapTab`), a strip button, a header button and `onTabSecondaryTap` on
+  the default chrome; `PanelChrome` replaces it entirely, keeping
+  `StripScope.tabSlot` / `stripSlot` so chips stay drop targets.
+- `PanelHost.contextMenus` (`const PanelMenus()`; null for none): a Material
+  menu on a right click on a chip, a strip, a header or a divider, built as
+  `PanelMenuEntry` data by `PanelMenus.defaultEntries` — close verbs and a
+  Split submenu, Close all, Move to edge, Equalise, Swap — greyed where they
+  do not apply, and rewritten through `PanelMenus.build`.
+- `example/`: an IDE-shaped demo — files at a fixed width, editors in the
+  middle, tools that only group with tools, a console along the bottom — with
+  a style switcher, a close guard, a context menu and save/restore. Live at
+  https://williamkaroldicioccio.github.io/fl_panel/.

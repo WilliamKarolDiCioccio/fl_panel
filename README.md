@@ -7,6 +7,21 @@ Code — and a file format to bring it back tomorrow.
 
 **[Try it in the browser](https://williamkaroldicioccio.github.io/fl_panel/).**
 
+![The example: a file tree, an editor group with a tab held mid-drag and the drop preview lit for a split beside it, tool panels on the right, a console along the bottom](https://raw.githubusercontent.com/WilliamKarolDiCioccio/fl_panel/main/doc/screenshot.png)
+
+## Install
+
+```yaml
+dependencies:
+  fl_panel: ^0.1.0
+```
+
+```dart
+import 'package:fl_panel/fl_panel.dart';
+```
+
+## Quickstart
+
 ```dart
 final controller = PanelController(
   app: PanelApp(windows: [
@@ -37,6 +52,11 @@ PanelHost(
   },
 );
 ```
+
+`contentBuilder` is the extension point: the tree carries a `contentId` and
+a metadata map per tab, and the host turns them into a widget. Content is
+rendered flat and keyed on the tab, so what it holds — a caret, a scroll
+offset — survives being docked somewhere else.
 
 ## What you get
 
@@ -102,3 +122,7 @@ by `.github/workflows/demo.yml`.
 ```sh
 cd example && flutter run -d linux
 ```
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
