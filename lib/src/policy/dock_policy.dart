@@ -12,6 +12,13 @@ import '../model/tab.dart';
 /// line. A move the policy refuses is simply never offered as a candidate; a
 /// drag never has to fail.
 ///
+/// One more question is answered here that is not about docking, because it
+/// is the same kind of host knowledge: which leaves may be the window's
+/// **focused** leaf — where `open` puts content, what the keyboard verbs act
+/// on, whose strip shows the full accent. An IDE's tool panels never are:
+/// clicking in the file tree must not make the tree where the next document
+/// opens. [takesFocus] is that, and the base class says every leaf does.
+///
 /// The base class allows everything, so a host that wants no rules passes
 /// [DockPolicy.permissive] or nothing at all.
 class DockPolicy {
@@ -29,4 +36,10 @@ class DockPolicy {
   /// Level two. Whether [moving] may be placed on [side] of [neighbour] as a
   /// leaf of its own. Rarely restricted; here for completeness of the matrix.
   bool canSplit(PanelTab moving, LayoutNode neighbour, DockSide side) => true;
+
+  /// Whether [leaf] may be the window's focused leaf. A leaf that does not is
+  /// still drawn, still docks and still activates its tabs; it just never
+  /// becomes where `open` puts content, and the accent stays on the leaf
+  /// that is.
+  bool takesFocus(LeafNode leaf) => true;
 }

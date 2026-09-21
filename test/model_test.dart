@@ -117,6 +117,74 @@ void main() {
       );
     });
 
+    test('an emptied editor area folds away while another remains', () {
+      TabGroup area(String id, List<String> tabs) =>
+          TabGroup(id: 'g.$id', tabs: tabs.map(tab).toList(), persistent: true);
+      final tree = split('root', PanelAxis.horizontal, [
+        area('one', ['a']),
+        area('two', ['b']),
+      ]);
+      final closed = LayoutTree.removeTab(tree, 'a');
+      expect(
+        closed,
+        area('two', ['b']),
+        reason: 'the empty area went, the other took the width',
+      );
+      final last = LayoutTree.removeTab(closed, 'b') as TabGroup;
+      expect(last.isEmpty, isTrue, reason: 'the last area always stays');
+      expect(last.id, 'g.two');
+    });
+
+    test('a tab dragged out of an editor area makes another editor area', () {
+      final tree = split('root', PanelAxis.horizontal, [
+        panel('x'),
+        TabGroup(id: 'g.editors', tabs: [tab('a'), tab('b')], persistent: true),
+      ]);
+      final result = LayoutTree.dock(
+        tree,
+        const DockSource.tab('a'),
+        const DockTarget.split('g.editors', DockSide.right),
+        newId: ids(),
+      );
+      final fresh = result!.leafOf('a') as TabGroup;
+      expect(fresh.persistent, isTrue);
+      expect((result.find('g.editors') as TabGroup).tabs.map((t) => t.id), [
+        'b',
+      ]);
+      // And back the other way: b out too, and the area it left folds.
+      final again = LayoutTree.dock(
+        result,
+        const DockSource.tab('b'),
+        DockTarget.join(fresh.id),
+        newId: ids(),
+      );
+      expect(again!.find('g.editors'), isNull);
+      expect(again.leafOf('b')!.id, fresh.id);
+    });
+
+    test('equalise and swap edit one split and nothing else', () {
+      final tree = split(
+        'root',
+        PanelAxis.horizontal,
+        [panel('a'), panel('b'), panel('c')],
+        sizes: const [
+          PanelExtent.fixed(100),
+          PanelExtent.flex(3),
+          PanelExtent.flex(1),
+        ],
+      );
+      final equal = LayoutTree.equalise(tree, 's.root') as SplitNode;
+      expect(equal.sizes, everyElement(const PanelExtent.flex()));
+      final swapped = LayoutTree.swap(tree, 's.root', 1) as SplitNode;
+      expect(swapped.children.map((c) => c.id), ['p.a', 'p.c', 'p.b']);
+      expect(swapped.sizes, [
+        const PanelExtent.fixed(100),
+        const PanelExtent.flex(1),
+        const PanelExtent.flex(3),
+      ], reason: 'a child takes its extent with it');
+      expect(LayoutTree.swap(tree, 's.root', 2), same(tree));
+    });
+
     test('closing a tab keeps the active content in view', () {
       final tree = tabGroup('g', ['a', 'b', 'c'], active: 2);
       final closed = LayoutTree.removeTab(tree, 'a') as TabGroup;

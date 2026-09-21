@@ -10,6 +10,8 @@ import '../model/node.dart';
 import '../model/tab.dart';
 import 'chrome.dart';
 import 'default_chrome.dart';
+import 'menus/panel_menu_host.dart';
+import 'menus/panel_menus.dart';
 import 'panel_theme.dart';
 
 /// Builds the widget shown for a tab. Called for every tab in the window, not
@@ -41,6 +43,7 @@ class PanelHost extends StatefulWidget {
     this.decorations = const PanelDecorations(),
     this.emptyBuilder,
     this.emptyLeafBuilder,
+    this.contextMenus = const PanelMenus(),
   });
 
   final PanelController controller;
@@ -71,6 +74,10 @@ class PanelHost extends StatefulWidget {
   /// dropped in.
   final Widget Function(BuildContext context, TabGroup group)? emptyLeafBuilder;
 
+  /// The right-click menus on chips, strips, headers and dividers, or null
+  /// for none. See [PanelMenus] for what they offer and how to add to it.
+  final PanelMenus? contextMenus;
+
   static String defaultTitle(PanelTab tab) {
     final title = tab.metadata['title'];
     return title is String ? title : tab.contentId;
@@ -98,6 +105,9 @@ class _PanelHostState extends State<PanelHost> {
   /// keyboard without knowing what is inside it.
   final _focusScopes = <String, FocusScopeNode>{};
   int? _handledReveal;
+
+  final _menuController = MenuController();
+  final _menuKey = GlobalKey<PanelMenuHostState>();
 
   @override
   void initState() {
@@ -157,9 +167,41 @@ class _PanelHostState extends State<PanelHost> {
     onDragCancel: _controller.cancelDrag,
     onTabSecondaryTap: (tabId, global) {
       final tab = _controller.tab(tabId);
-      if (tab != null) widget.decorations.onTabSecondaryTap?.call(tab, global);
+      if (tab == null) return;
+      // The decoration wins: a host that had its own menu keeps it.
+      final custom = widget.decorations.onTabSecondaryTap;
+      if (custom != null) {
+        custom(tab, global);
+        return;
+      }
+      final leaf = _root?.leafOf(tabId);
+      if (leaf != null) _openMenu(PanelMenuTabTarget(tab, leaf), global);
+    },
+    onStripSecondaryTap: (leafId, global) {
+      final leaf = _root?.find(leafId);
+      if (leaf is TabGroup) _openMenu(PanelMenuStripTarget(leaf), global);
+    },
+    onHeaderSecondaryTap: (leafId, global) {
+      final leaf = _root?.find(leafId);
+      if (leaf is SinglePanel) _openMenu(PanelMenuHeaderTarget(leaf), global);
     },
   );
+
+  /// Opens the menu for [target] at [global], in the host's own space.
+  void _openMenu(PanelMenuTarget target, Offset global) {
+    final menus = widget.contextMenus;
+    final box = context.findRenderObject();
+    if (menus == null || box is! RenderBox || !box.hasSize) return;
+    final entries = menus.entriesFor(
+      PanelMenuRequest(
+        controller: _controller,
+        windowId: widget.windowId,
+        target: target,
+        globalPosition: global,
+      ),
+    );
+    _menuKey.currentState?.open(entries, box.globalToLocal(global));
+  }
 
   /// What is under the pointer, for the resolver. Strips are found by
   /// hit-testing for the `TabSlot`/`StripSlot` metadata the chrome wears — the
@@ -242,8 +284,7 @@ class _PanelHostState extends State<PanelHost> {
     }
     _prune(root);
     _answerReveal(root);
-    final window = _controller.window(widget.windowId)!;
-    final focusedLeafId = window.focusedLeaf?.id;
+    final focusedLeafId = _controller.focusedLeaf(widget.windowId)?.id;
     final base = widget.theme.resolve(Theme.of(context));
     // Styles per group need their own resolution, since the blended floor is
     // a different colour; resolved once per style used, not per group.
@@ -399,6 +440,8 @@ class _PanelHostState extends State<PanelHost> {
                     _layout.bounds,
                   ),
                   onSettle: _controller.settle,
+                  onSecondaryTap: (global) =>
+                      _openMenu(PanelMenuDividerTarget(divider), global),
                 ),
               ),
             ),
@@ -420,6 +463,12 @@ class _PanelHostState extends State<PanelHost> {
                 child: widget.chrome.buildDropPreview(context, base),
               ),
             ),
+          );
+        }
+
+        if (widget.contextMenus != null) {
+          children.add(
+            PanelMenuHost(key: _menuKey, controller: _menuController),
           );
         }
 

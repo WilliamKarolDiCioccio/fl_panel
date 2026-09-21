@@ -50,8 +50,12 @@ LayoutNode demoLayout() => SplitNode(
             minWidth: 160,
           ),
         ),
+        // Persistent: the editor area stays when its last tab closes, and
+        // an editor dragged out of it makes another editor area, which folds
+        // away again when it empties while this one remains.
         TabGroup(
           id: 'editors',
+          persistent: true,
           tabs: [
             editorTab('editor-1', 'chapter-one.md'),
             editorTab('editor-2', 'chapter-two.md'),

@@ -39,6 +39,8 @@ final class ChromeCallbacks {
     required this.onDragEnd,
     required this.onDragCancel,
     required this.onTabSecondaryTap,
+    required this.onStripSecondaryTap,
+    required this.onHeaderSecondaryTap,
   });
 
   final void Function(String tabId) onActivate;
@@ -51,6 +53,10 @@ final class ChromeCallbacks {
   final VoidCallback onDragEnd;
   final VoidCallback onDragCancel;
   final void Function(String tabId, Offset global) onTabSecondaryTap;
+
+  /// A right click on a strip's background or a header, past the chips.
+  final void Function(String leafId, Offset global) onStripSecondaryTap;
+  final void Function(String leafId, Offset global) onHeaderSecondaryTap;
 }
 
 /// The hooks an application hangs on the default chrome without replacing
@@ -176,6 +182,7 @@ final class DividerScope {
     required this.geometry,
     required this.onDrag,
     required this.onSettle,
+    required this.onSecondaryTap,
   });
 
   final PanelTheme theme;
@@ -184,6 +191,9 @@ final class DividerScope {
   /// Pixels along the split's axis.
   final void Function(double delta) onDrag;
   final VoidCallback onSettle;
+
+  /// A right click on the divider.
+  final void Function(Offset global) onSecondaryTap;
 }
 
 /// Everything the host draws that is not content: strips, headers, dividers,

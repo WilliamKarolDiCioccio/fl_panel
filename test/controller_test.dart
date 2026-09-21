@@ -265,6 +265,47 @@ void main() {
     });
   });
 
+  group('focus policy', () {
+    PanelController tools() {
+      final c = PanelController(
+        policy: const _EditorsOnly(),
+        app: PanelApp(
+          windows: [
+            PanelWindow(
+              id: 'w',
+              focusedLeafId: 'tools',
+              root: SplitNode(
+                id: 'root',
+                axis: PanelAxis.horizontal,
+                children: [
+                  TabGroup(id: 'tools', tabs: [tab('files')]),
+                  TabGroup(id: 'editors', tabs: [tab('a')], persistent: true),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    test('a leaf that takes no focus is never the focused one', () {
+      final c = tools();
+      expect(
+        c.focusedLeaf('w')!.id,
+        'editors',
+        reason: 'the recorded tools leaf is passed over',
+      );
+      c.focusLeaf('w', 'tools');
+      c.activate('files');
+      expect(c.focusedLeaf('w')!.id, 'editors');
+      expect(c.window('w')!.focusedLeafId, 'tools', reason: 'untouched');
+      c.open('w', [tab('n')]);
+      expect(c.rootOf('w')!.leafOf('n')!.id, 'editors');
+    });
+  });
+
   group('closable', () {
     test('an unclosable tab refuses the verbs and keeps its leaf', () async {
       var asked = 0;
@@ -331,4 +372,11 @@ void main() {
       expect(notified, 0);
     });
   });
+}
+
+final class _EditorsOnly extends DockPolicy {
+  const _EditorsOnly();
+
+  @override
+  bool takesFocus(LeafNode leaf) => leaf is TabGroup && leaf.persistent;
 }

@@ -171,8 +171,24 @@ class PanelController extends ChangeNotifier {
   PanelWindow? window(String id) => _app.window(id);
   LayoutNode? rootOf(String windowId) => _app.window(windowId)?.root;
 
-  /// The leaf `open` puts content in and the keyboard verbs act on.
-  LeafNode? focusedLeaf(String windowId) => _app.window(windowId)?.focusedLeaf;
+  /// The leaf `open` puts content in and the keyboard verbs act on: the
+  /// window's recorded one while it is there and the policy lets it take
+  /// focus, else the first leaf that does.
+  LeafNode? focusedLeaf(String windowId) {
+    final window = _app.window(windowId);
+    return window == null ? null : _focusedLeafOf(window);
+  }
+
+  LeafNode? _focusedLeafOf(PanelWindow window) {
+    final root = window.root;
+    if (root == null) return null;
+    final recorded = window.focusedLeaf;
+    if (recorded != null && policy.takesFocus(recorded)) return recorded;
+    for (final leaf in root.leaves) {
+      if (policy.takesFocus(leaf)) return leaf;
+    }
+    return null;
+  }
 
   PanelTab? tab(String tabId) {
     for (final placement in _app.placements) {
@@ -223,9 +239,14 @@ class PanelController extends ChangeNotifier {
     final leaf = window?.root?.leafOf(tabId);
     if (window == null || leaf == null) return;
     final root = LayoutTree.activate(window.root, tabId);
-    final focusChanged = window.focusedLeafId != leaf.id;
+    final focusChanged =
+        window.focusedLeafId != leaf.id && policy.takesFocus(leaf);
     if (identical(root, window.root) && !focusChanged) return;
-    _app = _app.withWindow(window.withRoot(root).withFocus(leaf.id));
+    _app = _app.withWindow(
+      focusChanged
+          ? window.withRoot(root).withFocus(leaf.id)
+          : window.withRoot(root),
+    );
     if (!identical(root, window.root)) {
       _events.add(TabActivated(tab(tabId)!, window.id, leaf.id));
     }
@@ -248,11 +269,13 @@ class PanelController extends ChangeNotifier {
   }
 
   /// Makes [leafId] the window's focused leaf without changing its active
-  /// tab — the pointer going down in a panel, say.
+  /// tab — the pointer going down in a panel, say. Nothing happens for a
+  /// leaf the policy says takes no focus.
   void focusLeaf(String windowId, String leafId) {
     final window = _app.window(windowId);
     if (window == null || window.focusedLeafId == leafId) return;
-    if (window.root?.find(leafId) is! LeafNode) return;
+    final leaf = window.root?.find(leafId);
+    if (leaf is! LeafNode || !policy.takesFocus(leaf)) return;
     _app = _app.withWindow(window.withFocus(leafId));
     _events.add(LeafFocused(windowId, leafId));
     notifyListeners();
@@ -340,6 +363,19 @@ class PanelController extends ChangeNotifier {
 
   // -- placing --------------------------------------------------------------
 
+  /// Whether [dock] would change anything: the tree and the policy admit
+  /// the move and it is not a no-op. A dry run, for a menu deciding what to
+  /// grey out.
+  bool canDock(String windowId, DockSource source, DockTarget target) =>
+      LayoutTree.dock(
+        _app.window(windowId)?.root,
+        source,
+        target,
+        policy: policy,
+        newId: newId,
+      ) !=
+      null;
+
   /// Moves [source] to [target] in [windowId]. Returns whether anything
   /// changed — false when the policy refuses or the move is a no-op.
   bool dock(String windowId, DockSource source, DockTarget target) {
@@ -380,7 +416,7 @@ class PanelController extends ChangeNotifier {
       result = attempt(target);
     } else {
       final candidates = <DockTarget>[
-        DockJoin(window.focusedLeaf!.id),
+        if (_focusedLeafOf(window) case final focused?) DockJoin(focused.id),
         for (final leaf in root.leaves) DockJoin(leaf.id),
         const DockRoot(DockSide.right),
       ];
@@ -463,6 +499,25 @@ class PanelController extends ChangeNotifier {
 
   /// Marks the end of a run of live edits: the moment to write to disk.
   void settle() => onSettled?.call();
+
+  /// Gives every child of [splitId] an equal share. Settles.
+  void equalise(String windowId, String splitId) {
+    final window = _app.window(windowId);
+    if (window == null) return;
+    final root = LayoutTree.equalise(window.root, splitId);
+    if (identical(root, window.root)) return;
+    _commit(_app.withWindow(window.withRoot(root)));
+  }
+
+  /// Exchanges the two children either side of divider [dividerIndex] of
+  /// [splitId]. Settles.
+  void swap(String windowId, String splitId, int dividerIndex) {
+    final window = _app.window(windowId);
+    if (window == null) return;
+    final root = LayoutTree.swap(window.root, splitId, dividerIndex);
+    if (identical(root, window.root)) return;
+    _commit(_app.withWindow(window.withRoot(root)));
+  }
 
   // -- drag session ---------------------------------------------------------
 

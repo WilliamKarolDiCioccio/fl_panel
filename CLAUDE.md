@@ -99,16 +99,34 @@ everything scales down together rather than one child going to zero. A leaf's
 minimum is the largest among its tabs, not the active tab's, because switching
 tabs must never move a divider.
 
-**A persistent group is the editor area.** `TabGroup.persistent` keeps a
-group in the tree with no tabs in it — the one place in the model an empty
-leaf is allowed. Every IDE has it: documents come and go, but the area they
-open into is part of the layout, and closing the last one must leave an
-empty area rather than hand its rectangle to the neighbours. `normalise`
-leaves it alone, `removeTab` empties it, `join` keeps the flag, and an empty
-one cannot be dragged. It is the reason `LeafNode.activeTab` is nullable,
+**A persistent group is the editor area, and the last one stays.**
+`TabGroup.persistent` keeps a group in the tree with no tabs in it — the one
+place in the model an empty leaf is allowed. Every IDE has it: documents
+come and go, but the area they open into is part of the layout, and closing
+the last one must leave an empty area rather than hand its rectangle to the
+neighbours. The rule is **window-wide**, which is why `normalise` has a pass
+over the whole tree after the recursive one: an empty persistent group is
+removed as soon as the tree keeps another persistent group, and a tab
+dragged out of a persistent group makes a persistent group. So an editor
+area split in two is two editor areas, either folds away when it empties
+while the other remains, and only the last ever stands empty — the first
+draft kept every empty one, and a user who had split the area was left with
+a surface they could not close. `removeTab` empties, `join` keeps the flag,
+an empty one cannot be dragged, `LeafNode.activeTab` is nullable for it,
 and the host draws `emptyLeafBuilder` where its content would be. The first
 host to need it was ripple_effect, whose "Nothing open" placeholder is what
 the editor area shows with nothing in it.
+
+**Focus is a policy question too.** `DockPolicy.takesFocus(leaf)` says
+which leaves may be the window's focused leaf. It is on the dock policy
+rather than a flag on a tab because it is the same kind of host knowledge
+as who may share a strip with whom: an IDE's tool panels never take focus,
+so clicking in the file tree does not move where the next document opens,
+and the accent — which is what tells the user where it will open — stays on
+the editor group. `focusLeaf` and `activate` consult it; the controller's
+`focusedLeaf` falls back to the first leaf that does take focus. The
+window's recorded id is left alone, so a policy that changes at runtime
+does not lose it.
 
 **`PanelTab.closable` is a model fact, not a chrome option.** A file tree, a
 console, an IDE's tool windows: content the application always shows has no
@@ -220,7 +238,21 @@ replacing it — `tabLeading`, `tabTrailing` (which *replaces* the close glyph,
 the way an unsaved dot does; middle click and the verbs still close),
 `wrapTab` (around the whole chip, inside the drop slot — a tooltip or a
 tutorial's spotlight target), `stripTrailing`, `headerTrailing`,
-`onTabSecondaryTap`. The chrome never
+`onTabSecondaryTap`.
+
+**The context menus are `fl_nodes_v2`'s shape, on purpose.** `PanelMenuEntry`
+is `NodeMenuEntry` renamed — label, icon, shortcut hint, `onSelected` (null
+greys the row), children for a submenu, separators tidied at the end — so an
+application hosting both packages draws both menus alike, and so what a
+menu offers can be asserted as data (`PanelMenus.defaultEntries` is pure).
+`PanelMenuHost` is the node editor's menu host with the same load-bearing
+detail: the `MenuAnchor` is a zero-sized box at the click, never the host
+around it, or every click on the host would count as inside the menu.
+Four targets: a chip, a strip's background, a header, a divider; the chrome
+reports them through `ChromeCallbacks.onStripSecondaryTap`,
+`onHeaderSecondaryTap` and `DividerScope.onSecondaryTap`. A custom chrome
+that wants menus reports the same three. The menus need an `Overlay` above
+the host — any app widget — so a bare host passes `contextMenus: null`. The chrome never
 requires a `Material` ancestor.
 
 ## The one architectural decision

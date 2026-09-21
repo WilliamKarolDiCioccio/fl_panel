@@ -25,12 +25,35 @@ abstract final class LayoutTree {
   ///
   /// - a split whose child was removed keeps going with the rest; a split
   ///   left with one child is replaced by it; a split left with none is gone;
-  /// - an empty group is gone, unless it is persistent;
+  /// - an empty group is gone, unless it is persistent — and an empty
+  ///   persistent group is gone too when the tree keeps another persistent
+  ///   group, so closing the last document in one editor area folds it into
+  ///   its neighbour and only the last editor area ever stands empty;
   /// - a child split on its parent's axis is spliced into the parent, its
   ///   children taking their proportional share of the extent it had;
   /// - a group of one stays a group. It collapses to a single panel only
   ///   when a drop asks for that form.
   static LayoutNode? normalise(LayoutNode? node) {
+    var result = _normalise(node);
+    if (result == null) return null;
+    // The window-wide rule, which no subtree can answer for itself: an empty
+    // persistent group stays only while it is the last persistent group.
+    final persistent = [
+      for (final leaf in result.leaves)
+        if (leaf is TabGroup && leaf.persistent) leaf,
+    ];
+    if (persistent.length < 2) return result;
+    final empty = persistent.where((group) => group.isEmpty).toList();
+    // Keep one only when every persistent group is empty.
+    final spare = empty.length == persistent.length ? empty.skip(1) : empty;
+    for (final group in spare) {
+      result = _normalise(replace(result, group.id, null));
+      if (result == null) return null;
+    }
+    return result;
+  }
+
+  static LayoutNode? _normalise(LayoutNode? node) {
     switch (node) {
       case null:
         return null;
@@ -42,7 +65,7 @@ abstract final class LayoutTree {
         final children = <LayoutNode>[];
         final sizes = <PanelExtent>[];
         for (var i = 0; i < node.children.length; i++) {
-          final child = normalise(node.children[i]);
+          final child = _normalise(node.children[i]);
           if (child == null) continue;
           if (child is SplitNode && child.axis == node.axis) {
             final share = node.sizes[i];
@@ -247,11 +270,54 @@ abstract final class LayoutTree {
     );
   }
 
-  /// A new leaf of [form] holding [tabs].
-  static LeafNode leafOf(List<PanelTab> tabs, SurfaceForm form, String id) =>
-      form == SurfaceForm.single && tabs.length == 1
+  /// A new leaf of [form] holding [tabs]. A group is [persistent] when the
+  /// tabs came out of a persistent group: an editor area split in two is two
+  /// editor areas, and [normalise] is what folds the empty one away later.
+  static LeafNode leafOf(
+    List<PanelTab> tabs,
+    SurfaceForm form,
+    String id, {
+    bool persistent = false,
+  }) => form == SurfaceForm.single && tabs.length == 1
       ? SinglePanel(id: id, tab: tabs.single)
-      : TabGroup(id: id, tabs: tabs);
+      : TabGroup(id: id, tabs: tabs, persistent: persistent);
+
+  /// [root] with every child of the split with [splitId] given an equal
+  /// share: the way back from a divider dragged somewhere regrettable.
+  static LayoutNode? equalise(LayoutNode? root, String splitId) {
+    final split = root?.find(splitId);
+    if (split is! SplitNode) return root;
+    return replace(
+      root,
+      splitId,
+      split.copyWith(
+        sizes: List.filled(split.children.length, const PanelExtent.flex()),
+      ),
+    );
+  }
+
+  /// [root] with the two children either side of divider [dividerIndex] of
+  /// the split with [splitId] exchanged, extents and all.
+  static LayoutNode? swap(LayoutNode? root, String splitId, int dividerIndex) {
+    final split = root?.find(splitId);
+    if (split is! SplitNode) return root;
+    if (dividerIndex < 0 || dividerIndex >= split.children.length - 1) {
+      return root;
+    }
+    final children = List<LayoutNode>.of(split.children);
+    final sizes = List<PanelExtent>.of(split.sizes);
+    final a = dividerIndex;
+    final b = dividerIndex + 1;
+    children[a] = split.children[b];
+    children[b] = split.children[a];
+    sizes[a] = split.sizes[b];
+    sizes[b] = split.sizes[a];
+    return replace(
+      root,
+      splitId,
+      split.copyWith(children: children, sizes: sizes),
+    );
+  }
 
   /// The whole move: [source] taken out of [root] and put down at [target],
   /// if the tree and [policy] admit it. Returns null when they do not, and
@@ -270,10 +336,13 @@ abstract final class LayoutTree {
     // A moved leaf keeps its id wherever it lands, so anything keyed on it —
     // the host's chrome, a caller's bookkeeping — follows it across the move.
     String? keepId;
+    // A new leaf made from a persistent group's tab is persistent too.
+    var persistent = false;
     switch (source) {
       case DockTabSource(:final tabId):
         final leaf = root?.leafOf(tabId);
         if (leaf == null) return null;
+        persistent = leaf is TabGroup && leaf.persistent;
         if (target is DockJoin &&
             target.leafId == leaf.id &&
             target.index == null) {
@@ -297,6 +366,7 @@ abstract final class LayoutTree {
             policy,
             newId,
             root,
+            persistent: persistent,
           );
         }
         tree = replace(root, leaf.id, _without(leaf, tabId));
@@ -306,21 +376,36 @@ abstract final class LayoutTree {
         // An empty persistent group has nothing to move: its strip is a
         // drop target, not a handle.
         if (leaf.tabs.isEmpty) return null;
+        // A leaf already along the window's edge it is asked for is where
+        // it would land: the same picture, a level of split shallower.
+        if (target is DockRoot &&
+            root is SplitNode &&
+            root.axis == target.side.axis &&
+            (target.side.before ? root.children.first : root.children.last)
+                    .id ==
+                leafId) {
+          return null;
+        }
         tabs = leaf.tabs;
         keepId = leafId;
+        persistent = leaf is TabGroup && leaf.persistent;
         tree = replace(root, leafId, null);
       case DockFreshSource():
         tabs = source.tabs;
         if (tabs.isEmpty) return null;
     }
     return _place(
-      normalise(tree),
+      // Not normalised here: a persistent group just emptied by this move
+      // must still be there for a join that puts the tab straight back, and
+      // the window-wide rule about spare empty groups runs once, at the end.
+      _normalise(tree),
       tabs,
       target,
       policy,
       newId,
       root,
       leafId: keepId,
+      persistent: persistent,
     );
   }
 
@@ -332,6 +417,7 @@ abstract final class LayoutTree {
     String Function() newId,
     LayoutNode? original, {
     String? leafId,
+    bool persistent = false,
   }) {
     final LayoutNode? result;
     switch (target) {
@@ -348,7 +434,7 @@ abstract final class LayoutTree {
             !policy.canTakeForm(leaf.tab, SurfaceForm.tabbed)) {
           return null;
         }
-        result = join(tree, leafId, tabs, index);
+        result = normalise(join(tree, leafId, tabs, index));
       case DockSplit(:final nodeId, :final side, :final form):
         final neighbour = tree?.find(nodeId);
         if (neighbour == null) return null;
@@ -359,13 +445,18 @@ abstract final class LayoutTree {
         result = insertBeside(
           tree,
           nodeId,
-          leafOf(tabs, form, leafId ?? newId()),
+          leafOf(tabs, form, leafId ?? newId(), persistent: persistent),
           side,
           newId: newId,
         );
       case DockRoot(:final side, :final form):
         if (!_allowsLeaf(tabs, form, policy)) return null;
-        final leaf = leafOf(tabs, form, leafId ?? newId());
+        final leaf = leafOf(
+          tabs,
+          form,
+          leafId ?? newId(),
+          persistent: persistent,
+        );
         if (tree == null) {
           result = leaf;
         } else {

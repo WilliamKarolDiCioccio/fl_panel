@@ -10,5 +10,8 @@ export 'model.dart';
 export 'src/controller/panel_controller.dart';
 export 'src/widgets/chrome.dart';
 export 'src/widgets/default_chrome.dart';
+export 'src/widgets/menus/panel_menu_entry.dart';
+export 'src/widgets/menus/panel_menu_host.dart' show PanelMenuHost;
+export 'src/widgets/menus/panel_menus.dart';
 export 'src/widgets/panel_host.dart';
 export 'src/widgets/panel_theme.dart';

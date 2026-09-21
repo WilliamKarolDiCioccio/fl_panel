@@ -111,30 +111,23 @@ class _DemoPageState extends State<DemoPage> {
     controller.load(jsonDecode(saved) as Map<String, Object?>);
   }
 
-  void _contextMenu(PanelTab tab, Offset at) {
-    showMenu<void>(
-      context: context,
-      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
-      items: [
-        PopupMenuItem(
-          onTap: () => controller.close(tab.id),
-          child: const Text('Close'),
-        ),
-        PopupMenuItem(
-          onTap: () => controller.closeOthers(tab.id),
-          child: const Text('Close others'),
-        ),
-        PopupMenuItem(
-          onTap: () => controller.closeToTheRight(tab.id),
-          child: const Text('Close to the right'),
-        ),
-        PopupMenuItem(
-          onTap: () => controller.focus(tab.id, keyboard: true),
-          child: const Text('Focus'),
-        ),
-      ],
-    );
-  }
+  /// The host's own menus, with one line of ours on a chip's: the built-in
+  /// entries come in as `defaults`, so adding a line is adding a line.
+  List<PanelMenuEntry> _menu(
+    PanelMenuRequest request,
+    List<PanelMenuEntry> defaults,
+  ) => switch (request.target) {
+    PanelMenuTabTarget(:final tab) => [
+      ...defaults,
+      const PanelMenuEntry.separator(),
+      PanelMenuEntry(
+        label: 'Focus',
+        icon: Icons.center_focus_strong_outlined,
+        onSelected: () => controller.focus(tab.id, keyboard: true),
+      ),
+    ],
+    _ => defaults,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +180,10 @@ class _DemoPageState extends State<DemoPage> {
                         ], target: DockTarget.join(group.id)),
                       )
                     : null,
-                onTabSecondaryTap: _contextMenu,
+              ),
+              contextMenus: PanelMenus(build: _menu),
+              emptyLeafBuilder: (context, group) => const Center(
+                child: Text('Nothing open — pick a file, or press +'),
               ),
               contentBuilder: (context, tab) => buildPane(
                 context,

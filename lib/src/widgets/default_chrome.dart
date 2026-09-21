@@ -79,6 +79,10 @@ class _TabStripState extends State<TabStrip> {
       onPanUpdate: (d) => scope.callbacks.onDragUpdate(d.globalPosition),
       onPanEnd: (_) => scope.callbacks.onDragEnd(),
       onPanCancel: scope.callbacks.onDragCancel,
+      // A chip's own detector wins over this one for a click on a chip, so
+      // this is the background only.
+      onSecondaryTapUp: (d) =>
+          scope.callbacks.onStripSecondaryTap(group.id, d.globalPosition),
       child: scope.stripSlot(
         Container(
           height: scope.theme.stripHeight,
@@ -476,6 +480,8 @@ class PanelHeader extends StatelessWidget {
       onPanUpdate: (d) => scope.callbacks.onDragUpdate(d.globalPosition),
       onPanEnd: (_) => scope.callbacks.onDragEnd(),
       onPanCancel: scope.callbacks.onDragCancel,
+      onSecondaryTapUp: (d) =>
+          scope.callbacks.onHeaderSecondaryTap(panel.id, d.globalPosition),
       child: Container(
         height: theme.headerHeight,
         padding: const EdgeInsets.only(left: 12, right: 4),
@@ -586,6 +592,7 @@ class _DividerHandleState extends State<DividerHandle> {
         onVerticalDragEnd: horizontal ? null : (_) => _settle(),
         onHorizontalDragCancel: horizontal ? _settle : null,
         onVerticalDragCancel: horizontal ? null : _settle,
+        onSecondaryTapUp: (d) => widget.scope.onSecondaryTap(d.globalPosition),
         child: Center(
           child: Container(
             width: horizontal ? 1 : null,

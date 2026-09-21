@@ -61,8 +61,13 @@ PanelHost(
   `controller.focus(tabId, keyboard: true)`, which activates the tab, brings
   its chip into view and hands its content the keyboard.
 - **An editor area that stays**: a `persistent` group keeps its place with
-  nothing in it, and a tab can be `closable: false` — a file tree, a console
-  — so it moves but never goes.
+  nothing in it — and a second one folds away when it empties, so only the
+  last stands empty. A tab can be `closable: false` — a file tree, a console
+  — so it moves but never goes, and `DockPolicy.takesFocus` keeps such
+  panels from ever being where the next document opens.
+- **Right-click menus** on chips, strips, headers and dividers, from the
+  controller's own verbs — close, split, move to an edge, equalise, swap —
+  greyed where they do not apply, and rewritable through `PanelMenus.build`.
 - **A focused leaf per window**, where `open` puts new content and
   `nextTab`/`closeActive` act; a `closeGuard` for unsaved documents;
   `closeOthers`/`closeToTheRight`; `updateTab` for a title or a flag; and an

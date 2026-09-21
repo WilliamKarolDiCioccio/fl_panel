@@ -59,14 +59,40 @@ The first cut: the tree, the solver, the controller, the host.
   `updateTab` for a title or a flag. `test/controller_test.dart`.
 - `TabGroup.persistent` (false): a group that stays in the tree when its
   last tab closes — an IDE's editor area, where documents come and go but
-  the place they open into is part of the layout. `normalise` leaves an
-  empty persistent group alone, `removeTab` empties it rather than removing
-  it, `join` keeps the flag, and an empty one cannot be dragged: its strip is
-  a drop target, not a handle. `LeafNode.activeTab` is nullable for it, and
+  the place they open into is part of the layout. The rule is window-wide:
+  an empty persistent group is removed as soon as the tree keeps *another*
+  persistent group, so only the last editor area ever stands empty, and a
+  tab dragged out of a persistent group makes a persistent group, so an
+  editor area split in two is two editor areas that fold back into one as
+  they empty. `removeTab` empties rather than removes, `join` keeps the
+  flag, and an empty one cannot be dragged: its strip is a drop target, not
+  a handle. `LeafNode.activeTab` is nullable for it, and
   `PanelHost.emptyLeafBuilder` draws what goes where its content would. The
   file format carries `persistent`. *a persistent group survives its last
-  tab* in `test/model_test.dart`, *an empty persistent group draws its
-  placeholder and takes a drop* in `test/panel_host_test.dart`.
+  tab*, *an emptied editor area folds away while another remains* and *a tab
+  dragged out of an editor area makes another editor area* in
+  `test/model_test.dart`; *an empty persistent group draws its placeholder
+  and takes a drop* in `test/panel_host_test.dart`.
+- `DockPolicy.takesFocus(leaf)` (true): which leaves may be the window's
+  focused leaf — where `open` puts content, what the keyboard verbs act on,
+  whose strip shows the full accent. An IDE answers no for its tool panels,
+  so a click in the file tree never makes the tree where the next document
+  opens, and the accent stays on the editor group it will open into.
+  `PanelController.focusedLeaf` falls back to the first leaf that does. *focus
+  policy* in `test/controller_test.dart`.
+- Context menus, in the shape of `fl_nodes_v2`'s: `PanelHost.contextMenus`
+  (`const PanelMenus()`; null for none) opens a Material menu on a right
+  click on a chip, a strip's background, a single panel's header or a
+  divider. The entries are `PanelMenuEntry` data built by
+  `PanelMenus.defaultEntries` from the controller's verbs — close verbs and
+  a Split submenu on a chip, Close all and Move to edge on a strip or a
+  header, Equalise and Swap on a divider, each greyed when it would not
+  apply — and `PanelMenus.build` rewrites them with the defaults in hand. A
+  `PanelDecorations.onTabSecondaryTap` keeps winning on chips. Two verbs
+  came with them: `PanelController.equalise` and `swap`, over
+  `LayoutTree.equalise`/`swap`, and `canDock` as the dry run a menu greys
+  by; a leaf moved to the window edge it already sits on is a no-op.
+  `test/menus_test.dart`.
 - `PanelTab.closable` (true): off for content an application always shows.
   The chrome draws no close glyph on its chip or header, and
   `PanelController.close` refuses without asking the guard, so the group
