@@ -113,6 +113,13 @@ abstract final class LayoutTree {
 
   /// [root] with [replacement] where the node with [nodeId] was. The root
   /// itself may be replaced. Unknown ids leave the tree as it is.
+  ///
+  /// A child removed outright hands its room to the sibling before it — or
+  /// after it, when it was first — rather than to every sibling in
+  /// proportion: closing the right-hand editor group should widen the group
+  /// beside it, not nudge the file tree along too. Only flex room moves; a
+  /// fixed neighbour keeps its pixels and the room goes to the nearest flex
+  /// sibling, and a fixed child that goes leaves nothing to hand over.
   static LayoutNode? replace(
     LayoutNode? root,
     String nodeId,
@@ -124,12 +131,30 @@ abstract final class LayoutTree {
     var changed = false;
     final children = <LayoutNode>[];
     final sizes = <PanelExtent>[];
+    var orphaned = 0.0;
     for (var i = 0; i < root.children.length; i++) {
       final child = replace(root.children[i], nodeId, replacement);
       if (!identical(child, root.children[i])) changed = true;
-      if (child == null) continue;
+      if (child == null) {
+        final size = root.sizes[i];
+        if (size is! FlexExtent) continue;
+        final previous = sizes.lastIndexWhere((s) => s is FlexExtent);
+        if (previous >= 0) {
+          sizes[previous] = FlexExtent(
+            (sizes[previous] as FlexExtent).weight + size.weight,
+          );
+        } else {
+          orphaned += size.weight;
+        }
+        continue;
+      }
       children.add(child);
-      sizes.add(root.sizes[i]);
+      var size = root.sizes[i];
+      if (orphaned > 0 && size is FlexExtent) {
+        size = FlexExtent(size.weight + orphaned);
+        orphaned = 0;
+      }
+      sizes.add(size);
     }
     if (!changed) return root;
     if (children.isEmpty) return null;

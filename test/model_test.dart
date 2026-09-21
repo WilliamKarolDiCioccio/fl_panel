@@ -162,6 +162,45 @@ void main() {
       expect(again.leafOf('b')!.id, fresh.id);
     });
 
+    test('a removed child hands its room to its neighbour', () {
+      final tree = split(
+        'root',
+        PanelAxis.horizontal,
+        [panel('tree'), panel('left'), panel('right')],
+        sizes: const [
+          PanelExtent.flex(0.2),
+          PanelExtent.flex(0.4),
+          PanelExtent.flex(0.4),
+        ],
+      );
+      final closed = LayoutTree.removeLeaf(tree, 'p.right') as SplitNode;
+      expect(
+        closed.sizes,
+        const [PanelExtent.flex(0.2), PanelExtent.flex(0.8)],
+        reason: 'the editor beside it widens; the tree does not move',
+      );
+      final first = LayoutTree.removeLeaf(tree, 'p.tree') as SplitNode;
+      expect(first.sizes, const [
+        PanelExtent.flex(0.2 + 0.4),
+        PanelExtent.flex(0.4),
+      ], reason: 'a first child hands forward');
+      final fixedNeighbour = split(
+        'f',
+        PanelAxis.horizontal,
+        [panel('a'), panel('b'), panel('c')],
+        sizes: const [
+          PanelExtent.flex(1),
+          PanelExtent.fixed(100),
+          PanelExtent.flex(1),
+        ],
+      );
+      expect(
+        (LayoutTree.removeLeaf(fixedNeighbour, 'p.c') as SplitNode).sizes,
+        const [PanelExtent.flex(2), PanelExtent.fixed(100)],
+        reason: 'a fixed neighbour keeps its pixels; the flex one takes it',
+      );
+    });
+
     test('equalise and swap edit one split and nothing else', () {
       final tree = split(
         'root',
@@ -262,12 +301,10 @@ void main() {
       ]);
       expect(
         result.sizes,
-        const [
-          PanelExtent.flex(0.5),
-          PanelExtent.flex(0.5),
-          PanelExtent.flex(1),
-        ],
-        reason: 'b gave half of its flex(1) to the newcomer; c is untouched',
+        const [PanelExtent.flex(1), PanelExtent.flex(1), PanelExtent.flex(1)],
+        reason:
+            'a\'s room went to b when it left, and b gave half of that back '
+            'to the newcomer; c is untouched',
       );
     });
 

@@ -73,6 +73,12 @@ The first cut: the tree, the solver, the controller, the host.
   dragged out of an editor area makes another editor area* in
   `test/model_test.dart`; *an empty persistent group draws its placeholder
   and takes a drop* in `test/panel_host_test.dart`.
+- A removed child hands its room to the sibling before it — after it when
+  it was first — rather than to every sibling in proportion, so closing the
+  right-hand editor group widens the group beside it and does not nudge the
+  file tree along too; a fixed neighbour keeps its pixels and the room goes
+  to the nearest flex one. In `LayoutTree.replace`. *a removed child hands
+  its room to its neighbour* in `test/model_test.dart`.
 - `DockPolicy.takesFocus(leaf)` (true): which leaves may be the window's
   focused leaf — where `open` puts content, what the keyboard verbs act on,
   whose strip shows the full accent. An IDE answers no for its tool panels,
