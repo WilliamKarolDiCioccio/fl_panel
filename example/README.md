@@ -1,17 +1,16 @@
-# fl_panel_example
+# fl_panel example
 
-A new Flutter project.
+An IDE-shaped demo of the docking layout: files at a fixed width, editors in
+the middle, tools on the right that only group with other tools, a console
+along the bottom; a style switcher, a button that opens twelve editors to watch
+the strip scroll, a focus menu, a context menu, an unsaved dot that makes the
+close guard ask, and save/restore of the layout. It is not a sample: the
+pre-commit hooks run its suite on any change to `lib/`, because it is the only
+thing that exercises the docking end to end.
 
-## Getting Started
+```sh
+fvm flutter run -d linux
+```
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+It is also [live on GitHub Pages](https://williamkaroldicioccio.github.io/fl_panel/),
+built for the web from `main` by `../.github/workflows/demo.yml`.

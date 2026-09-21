@@ -5,6 +5,8 @@ that the user resizes, docks and rearranges, with ordinary Flutter widgets
 inside every panel. The shape you know from Blender, Visual Studio and VS
 Code — and a file format to bring it back tomorrow.
 
+**[Try it in the browser](https://williamkaroldicioccio.github.io/fl_panel/).**
+
 ```dart
 final controller = PanelController(
   app: PanelApp(windows: [
@@ -93,7 +95,9 @@ application's job.
 middle, tools on the right that only group with other tools, a console along
 the bottom; a style switcher, a button that opens twelve editors to watch the
 strip scroll, a focus menu, a context menu, an unsaved dot that makes the
-close guard ask, and save/restore of the layout.
+close guard ask, and save/restore of the layout. It is [live on GitHub
+Pages](https://williamkaroldicioccio.github.io/fl_panel/), rebuilt from `main`
+by `.github/workflows/demo.yml`.
 
 ```sh
 cd example && flutter run -d linux

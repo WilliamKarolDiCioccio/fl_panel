@@ -1,11 +1,11 @@
 {
-    "name": "fl_panel_example",
-    "short_name": "fl_panel_example",
+    "name": "fl_panel demo",
+    "short_name": "fl_panel demo",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A docking layout for Flutter — the example app, live.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
