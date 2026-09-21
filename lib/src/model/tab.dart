@@ -22,6 +22,7 @@ final class PanelTab {
     Map<String, Object?> metadata = const {},
     Set<SurfaceForm> forms = const {SurfaceForm.single, SurfaceForm.tabbed},
     this.keepAlive = true,
+    this.closable = true,
     this.minWidth = 0,
     this.minHeight = 0,
   }) : assert(forms.isNotEmpty, 'a tab must be allowed at least one form'),
@@ -42,6 +43,14 @@ final class PanelTab {
   /// off for content too heavy to hold offstage.
   final bool keepAlive;
 
+  /// Whether the user may close this tab. Off for content the application
+  /// always shows — a file tree, a console — the way an editor's tool
+  /// windows hide rather than close: the chrome draws no close glyph and
+  /// `PanelController.close` refuses without asking the guard. The tab can
+  /// still be moved, and the application can still remove it through an
+  /// edit of the tree.
+  final bool closable;
+
   /// The smallest size the content is useful at. The leaf holding this tab is
   /// never laid out smaller unless the whole window is over-constrained.
   final double minWidth;
@@ -54,6 +63,7 @@ final class PanelTab {
     Map<String, Object?>? metadata,
     Set<SurfaceForm>? forms,
     bool? keepAlive,
+    bool? closable,
     double? minWidth,
     double? minHeight,
   }) => PanelTab(
@@ -62,6 +72,7 @@ final class PanelTab {
     metadata: metadata ?? this.metadata,
     forms: forms ?? this.forms,
     keepAlive: keepAlive ?? this.keepAlive,
+    closable: closable ?? this.closable,
     minWidth: minWidth ?? this.minWidth,
     minHeight: minHeight ?? this.minHeight,
   );
@@ -72,6 +83,7 @@ final class PanelTab {
       other.id == id &&
       other.contentId == contentId &&
       other.keepAlive == keepAlive &&
+      other.closable == closable &&
       other.minWidth == minWidth &&
       other.minHeight == minHeight &&
       _sameSet(other.forms, forms) &&

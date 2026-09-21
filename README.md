@@ -60,6 +60,9 @@ PanelHost(
 - **Chips shrink to a floor, then the strip scrolls** — by wheel, and by
   `controller.focus(tabId, keyboard: true)`, which activates the tab, brings
   its chip into view and hands its content the keyboard.
+- **An editor area that stays**: a `persistent` group keeps its place with
+  nothing in it, and a tab can be `closable: false` — a file tree, a console
+  — so it moves but never goes.
 - **A focused leaf per window**, where `open` puts new content and
   `nextTab`/`closeActive` act; a `closeGuard` for unsaved documents;
   `closeOthers`/`closeToTheRight`; `updateTab` for a title or a flag; and an

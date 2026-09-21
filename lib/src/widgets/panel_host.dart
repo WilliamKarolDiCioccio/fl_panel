@@ -40,6 +40,7 @@ class PanelHost extends StatefulWidget {
     this.chrome = const DefaultPanelChrome(),
     this.decorations = const PanelDecorations(),
     this.emptyBuilder,
+    this.emptyLeafBuilder,
   });
 
   final PanelController controller;
@@ -64,6 +65,11 @@ class PanelHost extends StatefulWidget {
 
   /// What fills the host when the window has no tree.
   final WidgetBuilder? emptyBuilder;
+
+  /// What fills a persistent group that has no tabs — an IDE's "nothing
+  /// open" watermark. Its strip is still drawn above, so a tab can be
+  /// dropped in.
+  final Widget Function(BuildContext context, TabGroup group)? emptyLeafBuilder;
 
   static String defaultTitle(PanelTab tab) {
     final title = tab.metadata['title'];
@@ -279,6 +285,23 @@ class _PanelHostState extends State<PanelHost> {
             rect.width,
             (rect.height - chromeHeight).clamp(0, double.infinity),
           );
+          if (leaf is TabGroup && leaf.isEmpty) {
+            final empty = widget.emptyLeafBuilder?.call(context, leaf);
+            if (empty != null) {
+              children.add(
+                Positioned.fromRect(
+                  key: ValueKey('fl_panel.empty.${leaf.id}'),
+                  rect: _toRect(content),
+                  child: Listener(
+                    behavior: HitTestBehavior.translucent,
+                    onPointerDown: (_) => _callbacks.onFocusLeaf(leaf.id),
+                    child: empty,
+                  ),
+                ),
+              );
+            }
+            continue;
+          }
           for (final tab in leaf.tabs) {
             placements.add(
               _Placement(tab, leaf.id, content, identical(tab, leaf.activeTab)),

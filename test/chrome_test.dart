@@ -288,6 +288,44 @@ void main() {
       );
     });
 
+    testWidgets('an unclosable tab draws no glyph and wrapTab wraps the chip', (
+      tester,
+    ) async {
+      final c = controller(manyTabs(2));
+      c.updateTab('t0', (tab) => tab.copyWith(closable: false));
+      await pump(
+        tester,
+        c,
+        decorations: PanelDecorations(
+          wrapTab: (context, tab, chip) =>
+              Tooltip(message: 'tip ${tab.id}', child: chip),
+        ),
+      );
+      expect(
+        find.descendant(of: chip('t0'), matching: find.byType(CloseGlyph)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: chip('t1'), matching: find.byType(CloseGlyph)),
+        findsOneWidget,
+      );
+      expect(
+        find.ancestor(of: chip('t1'), matching: find.byTooltip('tip t1')),
+        findsOneWidget,
+      );
+      // Wrapped chips are still drop targets: t1 dragged before t0 reorders.
+      final gesture = await tester.startGesture(tester.getCenter(chip('t1')));
+      await tester.pump();
+      await gesture.moveTo(tester.getTopLeft(chip('t0')) + const Offset(4, 10));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      expect((c.rootOf('w')!.find('g') as TabGroup).tabs.map((t) => t.id), [
+        't1',
+        't0',
+      ]);
+    });
+
     testWidgets('a right click reaches the host with the position', (
       tester,
     ) async {

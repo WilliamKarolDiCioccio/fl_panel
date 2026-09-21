@@ -58,7 +58,7 @@ void main() {
       var notified = 0;
       c.addListener(() => notified++);
       c.focus('a2', keyboard: true);
-      expect((c.rootOf('w')!.find('left') as TabGroup).activeTab.id, 'a2');
+      expect((c.rootOf('w')!.find('left') as TabGroup).activeTab!.id, 'a2');
       expect(c.focusedLeaf('w')!.id, 'left');
       expect(c.reveal?.tabId, 'a2');
       expect(c.reveal?.keyboard, isTrue);
@@ -72,7 +72,7 @@ void main() {
       final c = controller();
       c.focusLeaf('w', 'right');
       expect(c.focusedLeaf('w')!.id, 'right');
-      expect((c.rootOf('w')!.find('left') as TabGroup).activeTab.id, 'a');
+      expect((c.rootOf('w')!.find('left') as TabGroup).activeTab!.id, 'a');
     });
 
     test('open defaults to the focused leaf and focuses the new tab', () {
@@ -80,7 +80,7 @@ void main() {
       c.open('w', [tab('n')]);
       final right = c.rootOf('w')!.find('right') as TabGroup;
       expect(right.tabs.map((t) => t.id), ['b', 'n']);
-      expect(right.activeTab.id, 'n');
+      expect(right.activeTab!.id, 'n');
       expect(c.reveal?.tabId, 'n');
     });
 
@@ -130,11 +130,11 @@ void main() {
     test('next and previous wrap within the focused group', () {
       final c = controller(focused: 'left');
       c.nextTab('w');
-      expect(c.focusedLeaf('w')!.activeTab.id, 'a2');
+      expect(c.focusedLeaf('w')!.activeTab!.id, 'a2');
       c.nextTab('w');
-      expect(c.focusedLeaf('w')!.activeTab.id, 'a');
+      expect(c.focusedLeaf('w')!.activeTab!.id, 'a');
       c.previousTab('w');
-      expect(c.focusedLeaf('w')!.activeTab.id, 'a2');
+      expect(c.focusedLeaf('w')!.activeTab!.id, 'a2');
     });
   });
 
@@ -262,6 +262,44 @@ void main() {
       final c = controller(focused: 'right');
       expect(await c.closeActive('w'), isTrue);
       expect(c.rootOf('w')!.find('right'), isNull);
+    });
+  });
+
+  group('closable', () {
+    test('an unclosable tab refuses the verbs and keeps its leaf', () async {
+      var asked = 0;
+      final c = controller(
+        guard: (tab) async {
+          asked++;
+          return true;
+        },
+      );
+      c.updateTab('b', (tab) => tab.copyWith(closable: false));
+      expect(await c.close('b'), isFalse);
+      expect(asked, 0, reason: 'the guard is never consulted for it');
+      await c.closeLeaf('w', 'right');
+      expect(c.tab('b'), isNotNull);
+      expect(c.rootOf('w')!.find('right'), isA<TabGroup>());
+      c.focusLeaf('w', 'right');
+      expect(await c.closeActive('w'), isFalse);
+    });
+
+    test('closeActive on an empty persistent group is a no-op', () async {
+      final c = PanelController(
+        app: PanelApp(
+          windows: [
+            PanelWindow(
+              id: 'w',
+              root: TabGroup(id: 'g', tabs: const [], persistent: true),
+            ),
+          ],
+        ),
+      );
+      addTearDown(c.dispose);
+      expect(await c.closeActive('w'), isFalse);
+      c.nextTab('w');
+      expect(c.open('w', [tab('n')]), isTrue, reason: 'open lands in it');
+      expect((c.rootOf('w')!.find('g') as TabGroup).activeTab!.id, 'n');
     });
   });
 

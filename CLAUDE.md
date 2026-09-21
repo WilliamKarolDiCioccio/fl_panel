@@ -99,6 +99,23 @@ everything scales down together rather than one child going to zero. A leaf's
 minimum is the largest among its tabs, not the active tab's, because switching
 tabs must never move a divider.
 
+**A persistent group is the editor area.** `TabGroup.persistent` keeps a
+group in the tree with no tabs in it — the one place in the model an empty
+leaf is allowed. Every IDE has it: documents come and go, but the area they
+open into is part of the layout, and closing the last one must leave an
+empty area rather than hand its rectangle to the neighbours. `normalise`
+leaves it alone, `removeTab` empties it, `join` keeps the flag, and an empty
+one cannot be dragged. It is the reason `LeafNode.activeTab` is nullable,
+and the host draws `emptyLeafBuilder` where its content would be. The first
+host to need it was ripple_effect, whose "Nothing open" placeholder is what
+the editor area shows with nothing in it.
+
+**`PanelTab.closable` is a model fact, not a chrome option.** A file tree, a
+console, an IDE's tool windows: content the application always shows has no
+close glyph and `close` refuses it without consulting the guard, so the
+group verbs skip it. A chrome option alone would have left the middle click
+and the verbs closing what the × could not.
+
 **`SinglePanel` and `TabGroup` are distinct types, and a group of one stays a
 group.** The affinities are about which *form* a content may take, and both
 shapes exist in real products — Blender's areas are single panels with a
@@ -108,7 +125,8 @@ one. A single panel joined by a tab becomes a group *under the same id*, and a
 moved leaf keeps its id, so anything keyed on a leaf follows it.
 
 **Every edit ends in `normalise`, and `dock` returns null for a no-op.** No
-caller ever sees a split of one, an empty group or a same-axis nesting.
+caller ever sees a split of one, an empty group that is not persistent, or a
+same-axis nesting.
 `LayoutTree.dock` answers null when the tree or the policy refuses the move
 *and* when the move would change nothing — a tab dropped on the centre of its
 own group, a panel dropped beside itself. The resolver uses that null to decide
@@ -200,7 +218,9 @@ resolves one theme per style used, since the floor colour differs.
 `PanelDecorations` is what an application hangs on the default chrome without
 replacing it — `tabLeading`, `tabTrailing` (which *replaces* the close glyph,
 the way an unsaved dot does; middle click and the verbs still close),
-`stripTrailing`, `headerTrailing`, `onTabSecondaryTap`. The chrome never
+`wrapTab` (around the whole chip, inside the drop slot — a tooltip or a
+tutorial's spotlight target), `stripTrailing`, `headerTrailing`,
+`onTabSecondaryTap`. The chrome never
 requires a `Material` ancestor.
 
 ## The one architectural decision

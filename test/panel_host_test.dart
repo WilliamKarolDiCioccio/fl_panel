@@ -71,7 +71,7 @@ void main() {
 
     final right = root(c).find('right') as TabGroup;
     expect(right.tabs.map((t) => t.id), ['b', 'a']);
-    expect(right.activeTab.id, 'a');
+    expect(right.activeTab!.id, 'a');
     expect(
       find.text('2'),
       findsOneWidget,
@@ -214,6 +214,69 @@ void main() {
     await tester.pump();
     expect(root(c), before);
   });
+
+  testWidgets(
+    'an empty persistent group draws its placeholder and takes a drop',
+    (tester) async {
+      final c = PanelController(
+        app: PanelApp(
+          windows: [
+            PanelWindow(
+              id: 'main',
+              root: SplitNode(
+                id: 'root',
+                axis: PanelAxis.horizontal,
+                children: [
+                  TabGroup(id: 'tools', tabs: [tab('a')]),
+                  TabGroup(id: 'editors', tabs: const [], persistent: true),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+      addTearDown(c.dispose);
+      tester.view.physicalSize = const Size(1000, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PanelHost(
+            controller: c,
+            windowId: 'main',
+            contentBuilder: (context, tab) => _Counter(key: ValueKey(tab.id)),
+            emptyLeafBuilder: (context, group) =>
+                Text('nothing open', key: ValueKey('empty:${group.id}')),
+          ),
+        ),
+      );
+      expect(find.byKey(const ValueKey('empty:editors')), findsOneWidget);
+      expect(
+        find.byType(TabStrip),
+        findsNWidgets(2),
+        reason: 'its strip stays',
+      );
+
+      // Clicking the placeholder focuses the group, the way content does.
+      await tester.tap(find.byKey(const ValueKey('empty:editors')));
+      await tester.pump();
+      expect(c.focusedLeaf('main')!.id, 'editors');
+
+      // Dragging the only tab onto the empty strip fills it and empties the
+      // other group, which is not persistent and goes.
+      final strips = find.byType(TabStrip);
+      final gesture = await tester.startGesture(tester.getCenter(chip('a')));
+      await tester.pump();
+      await gesture.moveTo(tester.getCenter(strips.at(1)));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      final editors = root(c) as TabGroup;
+      expect(editors.id, 'editors');
+      expect(editors.activeTab!.id, 'a');
+      expect(find.byKey(const ValueKey('empty:editors')), findsNothing);
+    },
+  );
 
   testWidgets('closing tabs collapses the tree down to nothing', (
     tester,

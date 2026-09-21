@@ -60,6 +60,7 @@ final class PanelDecorations {
   const PanelDecorations({
     this.tabLeading,
     this.tabTrailing,
+    this.wrapTab,
     this.stripTrailing,
     this.headerTrailing,
     this.showCloseButtons = true,
@@ -73,6 +74,11 @@ final class PanelDecorations {
   /// glyph's place — the way an unsaved dot does — and the tab still closes
   /// by middle click or by the controller.
   final Widget? Function(BuildContext context, PanelTab tab)? tabTrailing;
+
+  /// Around a whole chip — a tooltip, a spotlight target, a badge overlay.
+  /// Inside the drop slot, so the chip stays a drop target whatever wraps it.
+  final Widget Function(BuildContext context, PanelTab tab, Widget chip)?
+  wrapTab;
 
   /// At the end of a strip, outside the scrolling chips.
   final Widget? Function(BuildContext context, TabGroup group)? stripTrailing;

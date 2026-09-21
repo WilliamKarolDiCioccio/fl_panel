@@ -25,6 +25,7 @@ abstract final class LayoutTree {
   ///
   /// - a split whose child was removed keeps going with the rest; a split
   ///   left with one child is replaced by it; a split left with none is gone;
+  /// - an empty group is gone, unless it is persistent;
   /// - a child split on its parent's axis is spliced into the parent, its
   ///   children taking their proportional share of the extent it had;
   /// - a group of one stays a group. It collapses to a single panel only
@@ -33,7 +34,9 @@ abstract final class LayoutTree {
     switch (node) {
       case null:
         return null;
-      case LeafNode():
+      case TabGroup():
+        return node.isEmpty && !node.persistent ? null : node;
+      case SinglePanel():
         return node;
       case SplitNode():
         final children = <LayoutNode>[];
@@ -112,7 +115,8 @@ abstract final class LayoutTree {
   }
 
   /// [root] without the tab with [tabId], normalised. A group down to no
-  /// tabs is removed with it; a group down to one stays a group.
+  /// tabs is removed with it unless it is persistent; a group down to one
+  /// stays a group.
   static LayoutNode? removeTab(LayoutNode? root, String tabId) {
     final leaf = root?.leafOf(tabId);
     if (leaf == null) return root;
@@ -125,7 +129,12 @@ abstract final class LayoutTree {
         return null;
       case TabGroup():
         final index = leaf.indexOf(tabId);
-        if (leaf.tabs.length == 1) return null;
+        if (index < 0) return leaf;
+        if (leaf.tabs.length == 1) {
+          return leaf.persistent
+              ? leaf.copyWith(tabs: const [], active: 0)
+              : null;
+        }
         final tabs = List<PanelTab>.of(leaf.tabs)..removeAt(index);
         // The active tab follows the content, not the slot: closing the tab to
         // the left of the active one must not switch what is shown.
@@ -227,7 +236,14 @@ abstract final class LayoutTree {
     return replace(
       root,
       leafId,
-      TabGroup(id: leafId, tabs: existing, active: at),
+      TabGroup(
+        id: leafId,
+        tabs: existing,
+        active: at,
+        // A persistent group stays persistent however many tabs pass
+        // through it; a single panel that becomes a group is an ordinary one.
+        persistent: leaf is TabGroup && leaf.persistent,
+      ),
     );
   }
 
@@ -287,6 +303,9 @@ abstract final class LayoutTree {
       case DockLeafSource(:final leafId):
         final leaf = root?.find(leafId);
         if (leaf is! LeafNode) return null;
+        // An empty persistent group has nothing to move: its strip is a
+        // drop target, not a handle.
+        if (leaf.tabs.isEmpty) return null;
         tabs = leaf.tabs;
         keepId = leafId;
         tree = replace(root, leafId, null);

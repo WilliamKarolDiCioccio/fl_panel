@@ -55,6 +55,7 @@ abstract final class PanelJson {
       'type': 'group',
       'id': node.id,
       'active': node.active,
+      if (node.persistent) 'persistent': true,
       'tabs': [for (final tab in node.tabs) encodeTab(tab)],
     },
   };
@@ -74,6 +75,7 @@ abstract final class PanelJson {
         if (tab.allows(form)) form.name,
     ],
     if (!tab.keepAlive) 'keepAlive': false,
+    if (!tab.closable) 'closable': false,
     if (tab.minWidth > 0) 'minWidth': tab.minWidth,
     if (tab.minHeight > 0) 'minHeight': tab.minHeight,
   };
@@ -174,11 +176,13 @@ abstract final class PanelJson {
             active -= 1;
           }
         }
-        if (tabs.isEmpty) return null;
+        final persistent = json['persistent'] == true;
+        if (tabs.isEmpty && !persistent) return null;
         return TabGroup(
           id: id,
           tabs: tabs,
-          active: active.clamp(0, tabs.length - 1),
+          active: tabs.isEmpty ? 0 : active.clamp(0, tabs.length - 1),
+          persistent: persistent,
         );
       default:
         throw PanelFormatException('node $id has unknown type ${json['type']}');
@@ -212,6 +216,7 @@ abstract final class PanelJson {
           : const {},
       forms: forms.isEmpty ? SurfaceForm.values.toSet() : forms,
       keepAlive: json['keepAlive'] != false,
+      closable: json['closable'] != false,
       minWidth: (json['minWidth'] as num?)?.toDouble() ?? 0,
       minHeight: (json['minHeight'] as num?)?.toDouble() ?? 0,
     );

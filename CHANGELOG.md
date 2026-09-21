@@ -57,6 +57,26 @@ The first cut: the tree, the solver, the controller, the host.
   `TabUpdated`, `LayoutReplaced`. `closeGuard` asked before any close, from
   the × or a verb; `closeOthers`, `closeToTheRight`, `closeLeaf` ask per tab.
   `updateTab` for a title or a flag. `test/controller_test.dart`.
+- `TabGroup.persistent` (false): a group that stays in the tree when its
+  last tab closes — an IDE's editor area, where documents come and go but
+  the place they open into is part of the layout. `normalise` leaves an
+  empty persistent group alone, `removeTab` empties it rather than removing
+  it, `join` keeps the flag, and an empty one cannot be dragged: its strip is
+  a drop target, not a handle. `LeafNode.activeTab` is nullable for it, and
+  `PanelHost.emptyLeafBuilder` draws what goes where its content would. The
+  file format carries `persistent`. *a persistent group survives its last
+  tab* in `test/model_test.dart`, *an empty persistent group draws its
+  placeholder and takes a drop* in `test/panel_host_test.dart`.
+- `PanelTab.closable` (true): off for content an application always shows.
+  The chrome draws no close glyph on its chip or header, and
+  `PanelController.close` refuses without asking the guard, so the group
+  verbs skip it and `closeLeaf` keeps its leaf; it still moves. In the file
+  format as `closable`. *closable* in `test/controller_test.dart`, *an
+  unclosable tab draws no glyph* in `test/chrome_test.dart`.
+- `PanelDecorations.wrapTab`: a wrapper around the whole chip, inside the
+  drop slot — a tooltip, a spotlight target — because a host with a tour
+  needs to point at a tab and neither `tabLeading` nor `tabTrailing` is the
+  tab. Same test as above.
 - `package:fl_panel/model.dart` exports the Flutter-free half;
   `test/flutter_free_test.dart` keeps it so.
 - `example/`: an IDE-shaped demo with a metadata policy and save/restore.

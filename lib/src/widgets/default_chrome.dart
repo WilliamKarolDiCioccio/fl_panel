@@ -120,7 +120,9 @@ class _TabStripState extends State<TabStrip> {
     final width = constraints.maxWidth;
     _gap = spec.gap;
     _viewport = width;
-    final natural = (width - _gap * (n - 1)) / n;
+    // An empty persistent group has no chips to size; the width still has
+    // to be a number for the reveal arithmetic.
+    final natural = n == 0 ? theme.tabMinWidth : (width - _gap * (n - 1)) / n;
     _chipWidth = natural.clamp(theme.tabMinWidth, theme.tabMaxWidth);
     _scheduleReveal();
 
@@ -132,21 +134,22 @@ class _TabStripState extends State<TabStrip> {
       // active chip its own edge does the work.
       final nextActive = i + 1 == group.active;
       if (i > 0 && _gap > 0) chips.add(SizedBox(width: _gap));
+      final Widget chip = TabChip(
+        tab: tab,
+        active: active,
+        focused: scope.focused,
+        separatorAfter: i < n - 1 && !active && !nextActive,
+        title: scope.titleOf(tab),
+        theme: theme,
+        callbacks: scope.callbacks,
+        decorations: scope.decorations,
+      );
       chips.add(
         SizedBox(
           width: _chipWidth,
           child: scope.tabSlot(
             i,
-            TabChip(
-              tab: tab,
-              active: active,
-              focused: scope.focused,
-              separatorAfter: i < n - 1 && !active && !nextActive,
-              title: scope.titleOf(tab),
-              theme: theme,
-              callbacks: scope.callbacks,
-              decorations: scope.decorations,
-            ),
+            scope.decorations.wrapTab?.call(context, tab, chip) ?? chip,
           ),
         ),
       );
@@ -276,7 +279,7 @@ class _TabChipState extends State<TabChip> {
         ),
         if (trailing != null)
           trailing
-        else if (widget.decorations.showCloseButtons)
+        else if (widget.decorations.showCloseButtons && tab.closable)
           CloseGlyph(
             colour: theme.iconColor!,
             onTap: () => callbacks.onClose(tab.id),
@@ -499,7 +502,7 @@ class PanelHeader extends StatelessWidget {
               ),
             ),
             ?trailing,
-            if (scope.decorations.showCloseButtons)
+            if (scope.decorations.showCloseButtons && panel.tab.closable)
               CloseGlyph(
                 colour: theme.iconColor!,
                 onTap: () => scope.callbacks.onCloseLeaf(panel.id),

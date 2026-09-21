@@ -186,8 +186,8 @@ sealed class LeafNode extends LayoutNode {
   @override
   List<PanelTab> get tabs;
 
-  /// The tab currently shown.
-  PanelTab get activeTab;
+  /// The tab currently shown; null only for an empty persistent group.
+  PanelTab? get activeTab;
 
   /// The form every tab in this leaf currently takes.
   SurfaceForm get form;
@@ -245,10 +245,20 @@ final class SinglePanel extends LeafNode {
 }
 
 final class TabGroup extends LeafNode {
-  TabGroup({required this.id, required List<PanelTab> tabs, this.active = 0})
-    : assert(tabs.isNotEmpty, 'a group holds at least one tab'),
-      assert(active >= 0 && active < tabs.length, 'active tab out of range'),
-      tabs = List.unmodifiable(tabs);
+  TabGroup({
+    required this.id,
+    required List<PanelTab> tabs,
+    this.active = 0,
+    this.persistent = false,
+  }) : assert(
+         tabs.isNotEmpty || persistent,
+         'a group holds at least one tab unless it is persistent',
+       ),
+       assert(
+         tabs.isEmpty || (active >= 0 && active < tabs.length),
+         'active tab out of range',
+       ),
+       tabs = List.unmodifiable(tabs);
 
   @override
   final String id;
@@ -256,33 +266,56 @@ final class TabGroup extends LeafNode {
   @override
   final List<PanelTab> tabs;
 
-  /// Index into [tabs] of the tab shown.
+  /// Index into [tabs] of the tab shown. Meaningless while [tabs] is empty.
   final int active;
 
+  /// Whether the group stays in the tree when its last tab closes.
+  ///
+  /// The editor area of an IDE: documents come and go, but the place they
+  /// open into is part of the layout, and closing the last one must leave
+  /// an empty area rather than hand its rectangle to the neighbours. Every
+  /// other group is removed with its last tab, as [LayoutTree.normalise]
+  /// says. An empty group still draws its strip, so a tab can be dropped
+  /// back into it, and the host draws `emptyLeafBuilder` where the content
+  /// would be.
+  final bool persistent;
+
+  bool get isEmpty => tabs.isEmpty;
+
   @override
-  PanelTab get activeTab => tabs[active];
+  PanelTab? get activeTab => tabs.isEmpty ? null : tabs[active];
 
   @override
   SurfaceForm get form => SurfaceForm.tabbed;
 
   int indexOf(String tabId) => tabs.indexWhere((tab) => tab.id == tabId);
 
-  TabGroup copyWith({List<PanelTab>? tabs, int? active}) =>
-      TabGroup(id: id, tabs: tabs ?? this.tabs, active: active ?? this.active);
+  TabGroup copyWith({List<PanelTab>? tabs, int? active, bool? persistent}) =>
+      TabGroup(
+        id: id,
+        tabs: tabs ?? this.tabs,
+        active: active ?? this.active,
+        persistent: persistent ?? this.persistent,
+      );
 
   @override
   bool operator ==(Object other) =>
       other is TabGroup &&
       other.id == id &&
       other.active == active &&
+      other.persistent == persistent &&
       _sameList(other.tabs, tabs);
 
   @override
   int get hashCode => Object.hash(id, active, tabs.length);
 
   @override
-  String toString() =>
-      'Group(${tabs.map((t) => t.id).join(', ')}; active ${tabs[active].id})';
+  String toString() {
+    final shown = activeTab;
+    return 'Group(${tabs.map((t) => t.id).join(', ')}; '
+        '${shown == null ? 'empty' : 'active ${shown.id}'}'
+        '${persistent ? ', persistent' : ''})';
+  }
 }
 
 bool _sameList<T>(List<T> a, List<T> b) {

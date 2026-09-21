@@ -258,10 +258,12 @@ class PanelController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Closes [tabId], unless [closeGuard] says no. True when it closed.
+  /// Closes [tabId], unless the tab is not closable or [closeGuard] says
+  /// no. True when it closed. Synchronous when there is no guard to wait
+  /// for: a caller with none sees the tree changed on return.
   Future<bool> close(String tabId) async {
     final target = tab(tabId);
-    if (target == null) return false;
+    if (target == null || !target.closable) return false;
     if (closeGuard != null && !await closeGuard!(target)) return false;
     final window = _app.windowOfTab(tabId);
     if (window == null) return false;
@@ -303,8 +305,8 @@ class PanelController extends ChangeNotifier {
 
   /// Closes the active tab of the focused leaf.
   Future<bool> closeActive(String windowId) async {
-    final leaf = focusedLeaf(windowId);
-    return leaf == null ? false : close(leaf.activeTab.id);
+    final active = focusedLeaf(windowId)?.activeTab;
+    return active == null ? false : close(active.id);
   }
 
   /// Activates the tab after the active one in the focused group, wrapping.
@@ -517,7 +519,7 @@ class PanelController extends ChangeNotifier {
     final moved = switch (drag.source) {
       DockTabSource(:final tabId) => tabId,
       DockLeafSource(:final leafId) =>
-        (candidate.result.find(leafId) as LeafNode?)?.activeTab.id,
+        (candidate.result.find(leafId) as LeafNode?)?.activeTab?.id,
       DockFreshSource(:final tabs) => tabs.first.id,
     };
     if (moved != null) {

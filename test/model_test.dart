@@ -74,13 +74,60 @@ void main() {
       expect(LayoutTree.removeTab(panel('b'), 'b'), isNull);
     });
 
+    test('a persistent group survives its last tab and takes the next', () {
+      final editors = TabGroup(
+        id: 'g.editors',
+        tabs: [tab('a')],
+        persistent: true,
+      );
+      final tree = split('root', PanelAxis.horizontal, [panel('x'), editors]);
+      final emptied = LayoutTree.removeTab(tree, 'a') as SplitNode;
+      final left = emptied.children[1] as TabGroup;
+      expect(left.isEmpty, isTrue);
+      expect(left.activeTab, isNull);
+      expect(
+        left.persistent,
+        isTrue,
+        reason: 'the flag is the reason it stayed',
+      );
+      expect(
+        LayoutTree.normalise(emptied),
+        same(emptied),
+        reason: 'normalise leaves an empty persistent group alone',
+      );
+
+      final refilled = LayoutTree.dock(
+        emptied,
+        DockSource.fresh([tab('b')]),
+        const DockTarget.join('g.editors'),
+        newId: ids(),
+      );
+      final group = refilled!.find('g.editors') as TabGroup;
+      expect(group.activeTab!.id, 'b');
+      expect(group.persistent, isTrue, reason: 'joining keeps the flag');
+      expect(
+        LayoutTree.dock(
+          emptied,
+          const DockSource.leaf('g.editors'),
+          const DockTarget.root(DockSide.left),
+          newId: ids(),
+        ),
+        isNull,
+        reason: 'an empty group has nothing to move',
+      );
+    });
+
     test('closing a tab keeps the active content in view', () {
       final tree = tabGroup('g', ['a', 'b', 'c'], active: 2);
       final closed = LayoutTree.removeTab(tree, 'a') as TabGroup;
-      expect(closed.activeTab.id, 'c', reason: 'the index shifts with the tab');
+      expect(
+        closed.activeTab!.id,
+        'c',
+        reason: 'the index shifts with the tab',
+      );
       final closedActive = LayoutTree.removeTab(tree, 'c') as TabGroup;
       expect(
-        closedActive.activeTab.id,
+        closedActive.activeTab!.id,
         'b',
         reason: 'closing the active tab shows its neighbour',
       );
@@ -396,6 +443,30 @@ void main() {
       expect(PanelJson.decodeApp(json), app);
     });
 
+    test('an empty persistent group and an unclosable tab round-trip', () {
+      final layout = PanelApp(
+        windows: [
+          PanelWindow(
+            id: 'main',
+            root: split('root', PanelAxis.horizontal, [
+              SinglePanel(
+                id: 'p.files',
+                tab: PanelTab(id: 'files', contentId: 'files', closable: false),
+              ),
+              TabGroup(id: 'g.editors', tabs: const [], persistent: true),
+            ]),
+          ),
+        ],
+      );
+      final json = PanelJson.encodeApp(layout);
+      expect(PanelJson.decodeApp(json), layout);
+      final tabs = (json['windows'] as List).single as Map;
+      expect(
+        (((tabs['root'] as Map)['children'] as List).first as Map)['tab'],
+        containsPair('closable', false),
+      );
+    });
+
     test('refuses a newer version', () {
       final json = PanelJson.encodeApp(app)..['version'] = PanelApp.version + 1;
       expect(
@@ -423,7 +494,7 @@ void main() {
       );
       final editors =
           restored.window('main')!.root!.find('g.editors') as TabGroup;
-      expect(editors.activeTab.id, 'b');
+      expect(editors.activeTab!.id, 'b');
     });
   });
 }
